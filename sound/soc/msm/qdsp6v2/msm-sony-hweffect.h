@@ -30,6 +30,9 @@ int msm_sony_hweffect_sonybundle_handler(struct audio_client *ac,
 				     uint16_t bits_per_sample,
 				     uint16_t num_channels);
 
+void msm_sony_hweffect_sonybundle_get(struct sonybundle_params *sb,
+				     long *values);
+
 void init_sonybundle_params(struct sonybundle_params *sb);
 
 #endif /*_MSM_SONYEFFECT_HW_H*/

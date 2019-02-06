@@ -30,6 +30,14 @@ static struct clearphase_sp_tuning_params clearphase_sp_coefs;
 
 static struct xloud_tuning_params xloud_coefs;
 
+static uint32_t s_force_coefs_size;
+
+static uint32_t clearphase_hp_coefs_size;
+
+static uint32_t clearphase_sp_coefs_size;
+
+static uint32_t xloud_coefs_size;
+
 void *sony_hweffect_params_getparam(unsigned int effect_id)
 {
 	void *hw_params;
@@ -62,9 +70,29 @@ void *sony_hweffect_params_getparam(unsigned int effect_id)
 	return hw_params;
 }
 
+int sony_hweffect_params_getparam_size(long *values)
+{
+	if (values == NULL) {
+		pr_err("%s: invald pointer", __func__);
+		return -EINVAL;
+	}
+
+	values[0] = (long)s_force_coefs_size;
+	values[1] = (long)clearphase_hp_coefs_size;
+	values[2] = (long)clearphase_sp_coefs_size;
+	values[3] = (long)xloud_coefs_size;
+
+	return 0;
+}
+
 static int sony_hweffect_params_open(struct inode *inode, struct file *f)
 {
 	pr_debug("%s\n", __func__);
+	s_force_coefs_size = 0;
+	clearphase_hp_coefs_size = 0;
+	clearphase_sp_coefs_size = 0;
+	xloud_coefs_size = 0;
+
 	return 0;
 }
 
@@ -80,6 +108,7 @@ static long sony_hweffect_params_ioctl_shared(struct file *f,
 			pr_err("%s: fail to copy memory handle!\n", __func__);
 			return -EFAULT;
 		}
+		s_force_coefs_size = sizeof(s_force_coefs);
 		break;
 
 	case CLEARPHASE_HP_PARAM:
@@ -88,6 +117,7 @@ static long sony_hweffect_params_ioctl_shared(struct file *f,
 			pr_err("%s: fail to copy memory handle!\n", __func__);
 			return -EFAULT;
 		}
+		clearphase_hp_coefs_size = sizeof(clearphase_hp_coefs);
 		break;
 
 	case CLEARPHASE_SP_PARAM:
@@ -96,6 +126,7 @@ static long sony_hweffect_params_ioctl_shared(struct file *f,
 			pr_err("%s: fail to copy memory handle!\n", __func__);
 			return -EFAULT;
 		}
+		clearphase_sp_coefs_size = sizeof(clearphase_sp_coefs);
 		break;
 
 	case XLOUD_PARAM:
@@ -104,6 +135,7 @@ static long sony_hweffect_params_ioctl_shared(struct file *f,
 			pr_err("%s: fail to copy memory handle!\n", __func__);
 			return -EFAULT;
 		}
+		xloud_coefs_size = sizeof(xloud_coefs);
 		break;
 
 	default:

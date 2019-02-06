@@ -43,8 +43,8 @@
 const int secclass_map_size = ARRAY_SIZE(secclass_map);
 #endif
 
-#define AVC_CACHE_SLOTS			512
-#define AVC_DEF_CACHE_THRESHOLD		512
+#define AVC_CACHE_SLOTS			1024
+#define AVC_DEF_CACHE_THRESHOLD		2048
 #define AVC_CACHE_RECLAIM		16
 
 #ifdef CONFIG_SECURITY_SELINUX_AVC_STATS

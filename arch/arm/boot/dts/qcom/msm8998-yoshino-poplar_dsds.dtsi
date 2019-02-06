@@ -31,5 +31,5 @@
 };
 
 &sdhc_2 {
-	uim2-gpios = <&tlmm 39 0x0>;
+	uim2-gpios = <&tlmm 39 GPIO_ACTIVE_HIGH>;
 };

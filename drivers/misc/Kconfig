@@ -569,56 +569,19 @@ config QPNP_MISC
 	  peripheral. The MISC peripheral holds the USB ID interrupt
 	  and the driver provides an API to check if this interrupt
 	  is available on the current PMIC chip.
+
+config UID_SYS_STATS_DEBUG
+	bool "Per-TASK statistics"
+	depends on UID_SYS_STATS
+	default n
+	help
+	  Per TASK based io statistics exported to /proc/uid_io
+
 config MEMORY_STATE_TIME
 	tristate "Memory freq/bandwidth time statistics"
 	depends on PROFILING
 	help
 	  Memory time statistics exported to /sys/kernel/memory_state_time
-
-config NFC_PN547
-	tristate "NFC driver for PN547"
-	depends on I2C
-	default n
-	help
-	  his option enables device driver for PN547.
-	  GPIO, and PMIC GPIO configurations are controlled.
-	  The sysfs files provides the interface to send and receive
-	  the data, response and notification.
-
-config LDO_VIBRATOR
-	tristate "LDO Vibrator"
-	default n
-	help
-	  This option enables device driver support for the vibrator
-	  on the LDO line. The vibrator is controlled using the
-	  timed output class.
-
-config TOF_SENSOR
-	tristate "ToF Sensor"
-	depends on I2C
-	---help---
-	  Say Y here if you want to use ToF sensor.
-
-	  To compile this driver as a module, choose M here: the
-	  module will be called tof_sensor.
-
-config SENSORS_TCS3490
-	tristate "AMS TCS3490 Sensor Driver"
-	depends on I2C
-	default n
-	help
-	  If you say yes here you get support for the AMS tcs3490,
-	  ALS and color light sensors.
-	  This driver can also be build as module.
-
-config SIM_DETECT
-	tristate "SIM_DETECT driver support"
-	default n
-	help
-	  Say Y here
-	  if you want to support SIM_DETECT as detection device.
-	  This driver can be used for sending notifications via
-	  switch_class when sim card is inserted or removed.
 
 config RAMDUMP_TAGS
 	bool "Ramdump tags to communicate between kernel and ramdump"
@@ -676,6 +639,24 @@ config ONESEG_TUNER_SMTVJ19X
 	  1seg contents viewing.
 	  This module controls power switching and reset switching of
 	  SMT-VJ19x.
+
+config TOF_SENSOR
+	tristate "ToF Sensor"
+	depends on I2C
+	---help---
+	  Say Y here if you want to use ToF sensor.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called tof_sensor.
+
+config SENSORS_TCS3490
+	tristate "AMS TCS3490 Sensor Driver"
+	depends on I2C
+	default n
+	help
+	  If you say yes here you get support for the AMS tcs3490,
+	  ALS and color light sensors.
+	  This driver can also be build as module.
 
 source "drivers/misc/c2port/Kconfig"
 source "drivers/misc/eeprom/Kconfig"

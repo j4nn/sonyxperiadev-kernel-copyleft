@@ -26,6 +26,8 @@
 #include <sound/soc.h>
 #include "wcdcal-hwdep.h"
 
+extern int wcd_mbhc_jack_is_anc_mic_insert(void);
+
 const int cal_size_info[WCD9XXX_MAX_CAL] = {
 	[WCD9XXX_ANC_CAL] = 36864,
 	[WCD9XXX_MBHC_CAL] = 4096,
@@ -118,6 +120,18 @@ static int wcdcal_hwdep_ioctl_compat(struct snd_hwdep *hw, struct file *file,
 	struct wcdcal_ioctl_buffer __user *argp = (void __user *)arg;
 	struct wcdcal_ioctl_buffer32 fw_user32;
 	struct wcdcal_ioctl_buffer fw_user_compat;
+        int is_anc_insert = -1;
+        is_anc_insert = wcd_mbhc_jack_is_anc_mic_insert();
+        pr_debug("%s cmd:%x\n", __func__, cmd);
+        if (cmd == SNDRV_CTL_IOCTL_HWDEP_IS_ANC_INSERT) {
+                pr_debug("%s SNDRV_CTL_IOCTL_HWDEP_IS_ANC_INSERT ioctl\n", __func__);
+                if (copy_to_user((void *)arg, &is_anc_insert,
+                        sizeof(int))) {
+                        pr_err("%s: Copy to user failed\n", __func__);
+                        return -EFAULT;
+                }
+                return 0;
+        }
 
 	if (cmd != SNDRV_CTL_IOCTL_HWDEP_CAL_TYPE32) {
 		pr_err("%s: wrong ioctl command sent %u!\n", __func__, cmd);
@@ -141,7 +155,17 @@ static int wcdcal_hwdep_ioctl(struct snd_hwdep *hw, struct file *file,
 {
 	struct wcdcal_ioctl_buffer __user *argp = (void __user *)arg;
 	struct wcdcal_ioctl_buffer fw_user;
+        int is_anc_insert = wcd_mbhc_jack_is_anc_mic_insert();
 
+        if (cmd == SNDRV_CTL_IOCTL_HWDEP_IS_ANC_INSERT) {
+                pr_debug("%s SNDRV_CTL_IOCTL_HWDEP_IS_ANC_INSERT ioctl\n", __func__);
+                if (copy_to_user((void *)arg, &is_anc_insert,
+			sizeof(int))) {
+			pr_err("%s: Copy to user failed\n", __func__);
+			return -EFAULT;
+		}
+                return 0;
+        }
 	if (cmd != SNDRV_CTL_IOCTL_HWDEP_CAL_TYPE) {
 		pr_err("%s: wrong ioctl command sent %d!\n", __func__, cmd);
 		return -ENOIOCTLCMD;

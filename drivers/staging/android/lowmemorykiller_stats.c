@@ -36,6 +36,13 @@ struct lmk_stats {
 	atomic_long_t no_kill; /* mutex held */
 	atomic_long_t busy;
 	atomic_long_t error;
+	atomic_long_t zero_count;
+	atomic_long_t oom_count;
+	atomic_long_t oom_kill_count;
+	atomic_long_t morgue_count;
+	atomic_long_t balance_kill;
+	atomic_long_t balance_waste;
+
 	atomic_long_t unknown; /* internal */
 } st;
 
@@ -66,6 +73,24 @@ void lmk_inc_stats(int key)
 	case LMK_NO_KILL:
 		atomic_long_inc(&st.no_kill);
 		break;
+	case LMK_ZERO_COUNT:
+		atomic_long_inc(&st.zero_count);
+		break;
+	case LMK_OOM_COUNT:
+		atomic_long_inc(&st.oom_count);
+		break;
+	case LMK_OOM_KILL_COUNT:
+		atomic_long_inc(&st.oom_kill_count);
+		break;
+	case LMK_MORGUE_COUNT:
+		atomic_long_inc(&st.morgue_count);
+		break;
+	case LMK_BALANCE_KILL:
+		atomic_long_inc(&st.balance_kill);
+		break;
+	case LMK_BALANCE_WASTE:
+		atomic_long_inc(&st.balance_waste);
+		break;
 	default:
 		atomic_long_inc(&st.unknown);
 		break;
@@ -82,6 +107,14 @@ static int lmk_proc_show(struct seq_file *m, void *v)
 	seq_printf(m, "busy: %ld\n", atomic_long_read(&st.busy));
 	seq_printf(m, "error: %ld\n", atomic_long_read(&st.error));
 	seq_printf(m, "no kill: %ld\n", atomic_long_read(&st.no_kill));
+	seq_printf(m, "zero: %ld\n", atomic_long_read(&st.zero_count));
+	seq_printf(m, "oom: %ld\n", atomic_long_read(&st.oom_count));
+	seq_printf(m, "oom kill: %ld\n", atomic_long_read(&st.oom_kill_count));
+	seq_printf(m, "morgue: %ld\n", atomic_long_read(&st.morgue_count));
+	seq_printf(m, "balance kill: %ld\n",
+		   atomic_long_read(&st.balance_kill));
+	seq_printf(m, "balance waste: %ld\n",
+		   atomic_long_read(&st.balance_waste));
 	seq_printf(m, "unknown: %ld (internal)\n",
 		   atomic_long_read(&st.unknown));
 

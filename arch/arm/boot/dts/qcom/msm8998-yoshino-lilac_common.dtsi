@@ -87,8 +87,8 @@
 		mount_angle = <90>;
 		sensor_rotation = <0>;
 		sensor_facing = <1>;
-		sensor_config_delay_num = <12>;
-		sensor_config_delay = <3 3 3 3 3 3 3 3 3 3 3 3>;
+		sensor_config_delay_num = <13>;
+		sensor_config_delay = <3 3 3 3 3 3 3 3 3 3 3 3 3>;
 		temperature_check_skip_num = <0>;
 		total_pixel_number_w = <3296>;
 		total_pixel_number_h = <2528>;
@@ -172,8 +172,8 @@
 		mount_angle = <90>;
 		sensor_rotation = <0>;
 		sensor_facing = <1>;
-		sensor_config_delay_num = <12>;
-		sensor_config_delay = <3 3 3 3 3 3 3 3 3 3 3 3>;
+		sensor_config_delay_num = <13>;
+		sensor_config_delay = <3 3 3 3 3 3 3 3 3 3 3 3 3>;
 		temperature_check_skip_num = <0>;
 		total_pixel_number_w = <3296>;
 		total_pixel_number_h = <2528>;
@@ -253,8 +253,8 @@
 		mount_angle = <90>;
 		sensor_rotation = <0>;
 		sensor_facing = <1>;
-		sensor_config_delay_num = <12>;
-		sensor_config_delay = <3 3 3 3 3 3 3 3 3 3 3 3>;
+		sensor_config_delay_num = <13>;
+		sensor_config_delay = <3 3 3 3 3 3 3 3 3 3 3 3 3>;
 		temperature_check_skip_num = <0>;
 		total_pixel_number_w = <3296>;
 		total_pixel_number_h = <2528>;

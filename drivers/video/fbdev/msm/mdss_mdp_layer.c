@@ -10,11 +10,6 @@
  * GNU General Public License for more details.
  *
  */
-/*
- * NOTE: This file has been modified by Sony Mobile Communications Inc.
- * Modifications are Copyright (c) 2017 Sony Mobile Communications Inc,
- * and licensed under the license of the file.
- */
 
 #define pr_fmt(fmt)	"%s: " fmt, __func__
 
@@ -1858,9 +1853,15 @@ static int __validate_secure_session(struct mdss_overlay_private *mdp5_data)
 		pr_err("secure-camera cnt:%d secure video:%d secure display:%d\n",
 				secure_cam_pipes, secure_vid_pipes, sd_pipes);
 		return -EINVAL;
-	} else {
-		return 0;
+	} else if (mdp5_data->ctl->is_video_mode &&
+		((sd_pipes && !mdp5_data->sd_enabled) ||
+		(!sd_pipes && mdp5_data->sd_enabled)) &&
+		!mdp5_data->cache_null_commit) {
+		pr_err("NULL commit missing before display secure session entry/exit\n");
+		return -EINVAL;
 	}
+
+	return 0;
 }
 
 /*

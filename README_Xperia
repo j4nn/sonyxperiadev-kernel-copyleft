@@ -6,7 +6,7 @@ Configuration files can be found in arch/arm64/configs.
   diffconfigs for each product:
     Xperia XZ Premium G8141       => maple_diffconfig
     Xperia XZ Premium Dual G8142  => maple_dsds_diffconfig
-    Xperia XZ1 G8341              => poplar_diffconfig
+    Xperia XZ1 G8341/G8343        => poplar_diffconfig
     Xperia XZ1 G8342              => poplar_dsds_diffconfig
     Xperia XZ1 Compact G8441      => lilac_diffconfig
 
@@ -54,6 +54,8 @@ How to build your kernel:
         --kernel out/arch/arm64/boot/Image.gz-dtb \
         --ramdisk ramdisk.img \
         --cmdline "androidboot.hardware=qcom user_debug=31 msm_rtb.filter=0x237 ehci-hcd.park=3 lpm_levels.sleep_disabled=1 sched_enable_hmp=1 sched_enable_power_aware=1 service_locator.enable=1 swiotlb=2048 androidboot.configfs=true androidboot.usbcontroller=a800000.dwc3 zram.backend=z3fold buildvariant=userdebug" \
+        --os_version 9 \
+        --os_patch_level 2018-10-01 \
         --base 0x00000000 \
         --kernel_offset 0x00008000 \
         --ramdisk_offset 0x01000000 \

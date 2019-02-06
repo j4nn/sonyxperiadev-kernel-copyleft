@@ -390,6 +390,9 @@ static struct input_handler mdss_input_handler = {
 
 static int lcd_backlight_registered;
 
+extern struct kset *class_kset;
+static struct kobject *backlight_link_kobj;
+
 static void mdss_fb_set_bl_brightness(struct led_classdev *led_cdev,
 				      enum led_brightness value)
 {
@@ -1482,6 +1485,21 @@ static int mdss_fb_probe(struct platform_device *pdev)
 			pr_err("led_classdev_register failed\n");
 		else
 			lcd_backlight_registered = 1;
+
+		if (lcd_backlight_registered) {
+			backlight_link_kobj = kobject_create_and_add("backlight",
+							&class_kset->kobj);
+			if (backlight_link_kobj != NULL) {
+				rc = sysfs_create_link(backlight_link_kobj,
+					&backlight_led.dev->kobj, "panel0-backlight");
+				if (rc) {
+					pr_err("create backlight link failed.\n");
+					kobject_put(backlight_link_kobj);
+				}
+			} else {
+				pr_err("create backlight kobj failed.\n");
+			}
+		}
 	}
 
 	mdss_fb_init_panel_modes(mfd, pdata);
@@ -1611,6 +1629,10 @@ static int mdss_fb_remove(struct platform_device *pdev)
 	unregister_framebuffer(mfd->fbi);
 
 	if (lcd_backlight_registered) {
+		if (backlight_link_kobj != NULL) {
+			sysfs_remove_link(backlight_link_kobj, "panel0-backlight");
+			kobject_put(backlight_link_kobj);
+		}
 		lcd_backlight_registered = 0;
 		led_classdev_unregister(&backlight_led);
 	}
@@ -4043,8 +4065,11 @@ skip_commit:
 	if (IS_ERR_VALUE(ret) || !sync_pt_data->flushed) {
 		mdss_fb_release_kickoff(mfd);
 		mdss_fb_signal_timeline(sync_pt_data);
-	}
 
+		if ((mfd->panel.type == MIPI_CMD_PANEL) &&
+			(mfd->mdp.signal_retire_fence))
+			mfd->mdp.signal_retire_fence(mfd, 1);
+	}
 	if (dynamic_dsi_switch) {
 		MDSS_XLOG(mfd->index, mfd->split_mode, new_dsi_mode,
 			XLOG_FUNC_EXIT);
@@ -4958,6 +4983,7 @@ static int mdss_fb_atomic_commit_ioctl(struct fb_info *info,
 	struct mdp_destination_scaler_data *ds_data = NULL;
 	struct mdp_destination_scaler_data __user *ds_data_user;
 	struct msm_fb_data_type *mfd;
+	struct mdss_overlay_private *mdp5_data = NULL;
 
 	ret = copy_from_user(&commit, argp, sizeof(struct mdp_layer_commit));
 	if (ret) {
@@ -4969,9 +4995,20 @@ static int mdss_fb_atomic_commit_ioctl(struct fb_info *info,
 	if (!mfd)
 		return -EINVAL;
 
+	mdp5_data = mfd_to_mdp5_data(mfd);
+
 	if (mfd->panel_info->panel_dead) {
 		pr_debug("early commit return\n");
 		MDSS_XLOG(mfd->panel_info->panel_dead);
+		/*
+		 * In case of an ESD attack, since we early return from the
+		 * commits, we need to signal the outstanding fences.
+		 */
+		mdss_fb_release_fences(mfd);
+		if ((mfd->panel.type == MIPI_CMD_PANEL) &&
+			mfd->mdp.signal_retire_fence && mdp5_data)
+			mfd->mdp.signal_retire_fence(mfd,
+						mdp5_data->retire_cnt);
 		return 0;
 	}
 
@@ -4997,6 +5034,7 @@ static int mdss_fb_atomic_commit_ioctl(struct fb_info *info,
 	input_layer_list = commit.commit_v1.input_layers;
 
 	if (layer_count > MAX_LAYER_COUNT) {
+		pr_err("invalid layer count :%d\n", layer_count);
 		ret = -EINVAL;
 		goto err;
 	} else if (layer_count) {

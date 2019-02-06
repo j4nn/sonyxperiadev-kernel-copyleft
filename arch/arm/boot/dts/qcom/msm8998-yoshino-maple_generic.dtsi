@@ -23,7 +23,7 @@
 	/* I2C : BLSP7 */
 	i2c@c1b5000 { /* BLSP2 QUP1 */
 		nfc@28 {
-			compatible = "nxp,pn547";
+			compatible = "nxp,pn553";
 			reg = <0x28>;
 			interrupt-parent = <&tlmm>;
 			interrupts = <92 0x1>;
@@ -34,9 +34,10 @@
 			qcom,clk-gpio = <&pm8998_gpios 21 0x00>;
 			clocks = <&clock_gcc clk_ln_bb_clk3_pin>;
 			clock-names = "nfc_clk";
-			pinctrl-names = "pn547-active", "pn547-inactive";
-			pinctrl-0 = <&msm_gpio_92 &msm_gpio_93>;
-			pinctrl-1 = <&msm_gpio_92 &msm_gpio_93>;
 		};
+	};
+
+	nfc,pm-ops {
+		compatible = "sony,pn553-pm-ops";
 	};
 };

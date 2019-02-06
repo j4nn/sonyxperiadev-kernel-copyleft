@@ -76,6 +76,10 @@ static irqreturn_t mmc_gpio_cd_irqt(int irq, void *dev_id)
 #ifdef CONFIG_MMC_BLOCK_DEFERRED_RESUME
 	unsigned long flags;
 #endif
+	int present = host->ops->get_cd(host);
+
+	pr_debug("%s: cd gpio irq, gpio state %d (CARD_%s)\n",
+		mmc_hostname(host), present, present?"INSERT":"REMOVAL");
 
 	if (!host->ops)
 		goto out;

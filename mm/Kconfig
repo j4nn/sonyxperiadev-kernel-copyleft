@@ -187,7 +187,7 @@ config MEMORY_HOTPLUG
 	bool "Allow for memory hot-add"
 	depends on SPARSEMEM || X86_64_ACPI_NUMA
 	depends on ARCH_ENABLE_MEMORY_HOTPLUG
-	depends on (IA64 || X86 || PPC_BOOK3S_64 || SUPERH || S390)
+	depends on (IA64 || X86 || PPC_BOOK3S_64 || SUPERH || S390 || ARM64)
 
 config MEMORY_HOTPLUG_SPARSE
 	def_bool y
@@ -308,6 +308,15 @@ config VIRT_TO_BUS
 config MMU_NOTIFIER
 	bool
 	select SRCU
+
+config OOM_SCORE_NOTIFIER
+	bool "OOM score notifier"
+	default n
+	help
+	  This creates a notifier for process oom_score_adj status.
+	  It create events for new, updated or freed tasks and
+	  are used to build a mirrored task list in
+	  lowmemorykiller.
 
 config KSM
 	bool "Enable KSM for page merging"
@@ -676,6 +685,7 @@ config DEFERRED_STRUCT_PAGE_INIT
 	default n
 	depends on ARCH_SUPPORTS_DEFERRED_STRUCT_PAGE_INIT
 	depends on MEMORY_HOTPLUG
+	depends on !NEED_PER_CPU_KM
 	help
 	  Ordinarily all struct pages are initialised during early boot in a
 	  single thread. On very large machines this can take a considerable

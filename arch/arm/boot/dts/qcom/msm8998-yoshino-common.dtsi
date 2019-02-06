@@ -14,7 +14,7 @@
  * Modifications are Copyright (c) 2016 Sony Mobile Communications Inc,
  * and licensed under the license of the file.
  */
-
+#include <dt-bindings/gpio/gpio.h>
 
 / {
 	aliases {
@@ -153,7 +153,7 @@
 			flash_on_post_probe = <1>;
 			flip_config = <0>;
 			watchdog_enabled = <1>;
-			watchdog_delay_ms = <3000>;
+			watchdog_delay_ms = <10000>;
 			charger_supported = <0>;
 			pen_supported = <0>;
 			glove_supported = <1>;
@@ -676,8 +676,8 @@
 		mount_angle = <90>;
 		sensor_rotation = <0>;
 		sensor_facing = <0x00>;
-		sensor_config_delay_num = <12>;
-		sensor_config_delay = <4 3 4 4 4 4 4 4 4 4 4 4>;
+		sensor_config_delay_num = <13>;
+		sensor_config_delay = <4 3 4 4 4 4 4 4 4 4 4 4 4>;
 		temperature_check_skip_num = <0>;
 		total_pixel_number_w = <5520>;
 		total_pixel_number_h = <4032>;
@@ -757,8 +757,8 @@
 		mount_angle = <90>;
 		sensor_rotation = <0>;
 		sensor_facing = <0x00>;
-		sensor_config_delay_num = <12>;
-		sensor_config_delay = <4 3 4 4 4 4 4 4 4 4 4 4>;
+		sensor_config_delay_num = <13>;
+		sensor_config_delay = <4 3 4 4 4 4 4 4 4 4 4 4 4>;
 		temperature_check_skip_num = <0>;
 		total_pixel_number_w = <5520>;
 		total_pixel_number_h = <4032>;
@@ -844,8 +844,8 @@
 		mount_angle = <270>;
 		sensor_rotation = <180>;
 		sensor_facing = <1>;
-		sensor_config_delay_num = <12>;
-		sensor_config_delay = <3 3 3 3 3 3 3 3 3 3 3 3>;
+		sensor_config_delay_num = <13>;
+		sensor_config_delay = <3 3 3 3 3 3 3 3 3 3 3 3 3>;
 		temperature_check_skip_num = <8>;
 		total_pixel_number_w = <4224>;
 		total_pixel_number_h = <3192>;
@@ -933,8 +933,8 @@
 		mount_angle = <270>;
 		sensor_rotation = <180>;
 		sensor_facing = <1>;
-		sensor_config_delay_num = <12>;
-		sensor_config_delay = <3 3 3 3 3 3 3 3 3 3 3 3>;
+		sensor_config_delay_num = <13>;
+		sensor_config_delay = <3 3 3 3 3 3 3 3 3 3 3 3 3>;
 		temperature_check_skip_num = <8>;
 		total_pixel_number_w = <4224>;
 		total_pixel_number_h = <3192>;
@@ -1022,8 +1022,8 @@
 		mount_angle = <270>;
 		sensor_rotation = <180>;
 		sensor_facing = <1>;
-		sensor_config_delay_num = <12>;
-		sensor_config_delay = <3 3 3 3 3 3 3 3 3 3 3 3>;
+		sensor_config_delay_num = <13>;
+		sensor_config_delay = <3 3 3 3 3 3 3 3 3 3 3 3 3>;
 		temperature_check_skip_num = <8>;
 		total_pixel_number_w = <4224>;
 		total_pixel_number_h = <3192>;
@@ -3523,7 +3523,7 @@
 };
 
 &sdhc_2 {
-	cd-gpios = <&tlmm 95 0x0>;
+	cd-gpios = <&tlmm 95 GPIO_ACTIVE_HIGH>;
 };
 
 &spmi_bus {
@@ -3564,7 +3564,7 @@
 
 &red_led {
 	somc,pwm-channel = <4>;
-	linux,name = "led:rgb_red";
+	linux,name = "red";
 	linux,default-trigger = "none";
 	somc,color_variation_max_num = <4>;
 	somc,max_current = <
@@ -3575,7 +3575,7 @@
 };
 &green_led {
 	somc,pwm-channel = <3>;
-	linux,name = "led:rgb_green";
+	linux,name = "green";
 	linux,default-trigger = "none";
 	somc,color_variation_max_num = <4>;
 	somc,max_current = <
@@ -3587,7 +3587,7 @@
 
 &blue_led {
 	somc,pwm-channel = <2>;
-	linux,name = "led:rgb_blue";
+	linux,name = "blue";
 	linux,default-trigger = "none";
 	somc,color_variation_max_num = <4>;
 	somc,max_current = <

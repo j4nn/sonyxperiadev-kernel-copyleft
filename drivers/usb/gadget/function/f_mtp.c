@@ -149,7 +149,6 @@ struct mtp_dev {
 	unsigned dbg_write_index;
 	bool is_ptp;
 	struct mutex  read_mutex;
-	bool isMSOSDesc;
 };
 
 static struct usb_interface_descriptor mtp_interface_desc = {
@@ -1439,7 +1438,6 @@ static int mtp_ctrlrequest(struct usb_composite_dev *cdev,
 			head->wIndex = cpu_to_le16(4);
 			head->bCount = func_num;
 			value = min_t(u16, w_length, total);
-			dev->isMSOSDesc = true;
 		}
 	}
 	if ((ctrl->bRequestType & USB_TYPE_MASK) == USB_TYPE_CLASS) {
@@ -1618,7 +1616,6 @@ mtp_function_unbind(struct usb_configuration *c, struct usb_function *f)
 	mutex_unlock(&dev->read_mutex);
 	dev->state = STATE_OFFLINE;
 	dev->is_ptp = false;
-	dev->isMSOSDesc = false;
 	kfree(f->os_desc_table);
 	f->os_desc_n = 0;
 	fi_mtp->func_inst.f = NULL;
@@ -1884,24 +1881,8 @@ static struct configfs_item_operations mtp_item_ops = {
 	.release        = mtp_attr_release,
 };
 
-static ssize_t mtp_isMSOSDesc_show(struct config_item *item,
-		char *page)
-{
-	struct mtp_dev	*dev = to_mtp_instance(item)->dev;
-
-	return snprintf(page, 3, "%s\n", dev->isMSOSDesc ? "Y" : "N");
-}
-
-CONFIGFS_ATTR_RO(mtp_, isMSOSDesc);
-
-static struct configfs_attribute *mtp_config_attrs[] = {
-	&mtp_attr_isMSOSDesc,
-	NULL,
-};
-
 static struct config_item_type mtp_func_type = {
 	.ct_item_ops    = &mtp_item_ops,
-	.ct_attrs	= mtp_config_attrs,
 	.ct_owner       = THIS_MODULE,
 };
 

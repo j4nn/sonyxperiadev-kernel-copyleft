@@ -79,8 +79,8 @@ struct gpu_load_queue {
 	int tail;
 };
 
-static u64 suspend_time;
-static u64 suspend_start;
+static u64 suspend_time, suspend_time_idd;
+static u64 suspend_start, suspend_start_idd;
 static unsigned long acc_total, acc_relative_busy;
 static unsigned long gpu_load_total, gpu_load_rel_busy;
 static struct gpu_load_queue *gpu_load_infos;
@@ -108,6 +108,21 @@ u64 suspend_time_ms(void)
 	time_diff = suspend_sampling_time - suspend_start;
 	/* Update the suspend_start sample again */
 	suspend_start = suspend_sampling_time;
+	return time_diff;
+}
+
+u64 suspend_time_ms_idd(void)
+{
+	u64 suspend_sampling_time;
+	u64 time_diff = 0;
+
+	if (suspend_start_idd == 0)
+		return 0;
+
+	suspend_sampling_time = (u64)ktime_to_ms(ktime_get());
+	time_diff = suspend_sampling_time - suspend_start_idd;
+	/* Update the suspend_start sample again */
+	suspend_start_idd = suspend_sampling_time;
 	return time_diff;
 }
 
@@ -249,6 +264,18 @@ static ssize_t gpu_period_load_show(struct device *dev,
 		);
 }
 
+static ssize_t gpu_load_idd_show(struct device *dev,
+			struct device_attribute *attr,
+			char *buf)
+{
+	unsigned long busy, total;
+	spin_lock(&sample_load_lock);
+	busy = gpu_load_rel_busy;
+	total = gpu_load_total;
+	spin_unlock(&sample_load_lock);
+	return snprintf(buf, PAGE_SIZE, "%lu %lu\n", busy, total);
+}
+
 /*
  * Returns the time in ms for which gpu was in suspend state
  * since last time the entry is read.
@@ -274,8 +301,30 @@ static ssize_t suspend_time_show(struct device *dev,
 	return snprintf(buf, PAGE_SIZE, "%llu\n", time_diff);
 }
 
+static ssize_t suspend_time_idd_show(struct device *dev,
+	struct device_attribute *attr,
+	char *buf)
+{
+	u64 time_diff = 0;
+
+	spin_lock(&suspend_lock);
+	time_diff = suspend_time_ms_idd();
+	/*
+	 * Adding the previous suspend time also as the gpu
+	 * can go and come out of suspend states in between
+	 * reads also and we should have the total suspend
+	 * since last read.
+	 */
+	suspend_time_idd += time_diff;
+	spin_unlock(&suspend_lock);
+
+	return snprintf(buf, PAGE_SIZE, "%llu\n", suspend_time_idd);
+}
+
 static DEVICE_ATTR(gpu_load, 0444, gpu_load_show, NULL);
 static DEVICE_ATTR(gpu_period_load, 0444, gpu_period_load_show, NULL);
+static DEVICE_ATTR(gpu_load_idd, 0444, gpu_load_idd_show, NULL);
+static DEVICE_ATTR(gpu_suspend_idd, 0444, suspend_time_idd_show, NULL);
 
 static DEVICE_ATTR(suspend_time, 0444,
 		suspend_time_show,
@@ -284,6 +333,8 @@ static DEVICE_ATTR(suspend_time, 0444,
 static const struct device_attribute *adreno_tz_attr_list[] = {
 		&dev_attr_gpu_load,
 		&dev_attr_gpu_period_load,
+		&dev_attr_gpu_load_idd,
+		&dev_attr_gpu_suspend_idd,
 		&dev_attr_suspend_time,
 		NULL
 };
@@ -734,6 +785,7 @@ static int tz_handler(struct devfreq *devfreq, unsigned int event, void *data)
 			spin_lock(&suspend_lock);
 			/* Collect the start sample for suspend time */
 			suspend_start = (u64)ktime_to_ms(ktime_get());
+			suspend_start_idd = suspend_start;
 			spin_unlock(&suspend_lock);
 		}
 		break;
@@ -741,8 +793,10 @@ static int tz_handler(struct devfreq *devfreq, unsigned int event, void *data)
 	case DEVFREQ_GOV_RESUME:
 		spin_lock(&suspend_lock);
 		suspend_time += suspend_time_ms();
+		suspend_time_idd += suspend_time_ms_idd();
 		/* Reset the suspend_start when gpu resumes */
 		suspend_start = 0;
+		suspend_start_idd = 0;
 		spin_unlock(&suspend_lock);
 
 	case DEVFREQ_GOV_INTERVAL:

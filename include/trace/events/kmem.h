@@ -345,21 +345,24 @@ TRACE_EVENT_CONDITION(mm_page_pcpu_drain,
 
 TRACE_EVENT(mm_page_alloc_fail,
 
-	TP_PROTO(int alloc_order),
+	TP_PROTO(int alloc_order, gfp_t gfp_mask),
 
-	TP_ARGS(alloc_order),
+	TP_ARGS(alloc_order, gfp_mask),
 
 	TP_STRUCT__entry(
 		__field(int, alloc_order)
+		__field(gfp_t, gfp_mask)
 	),
 
 	TP_fast_assign(
 		__entry->alloc_order		= alloc_order;
+		__entry->gfp_mask		= gfp_mask;
 	),
 
-	TP_printk("alloc_order=%d pageblock_order=%d",
+	TP_printk("alloc_order=%d pageblock_order=%d gfp_mask=%s",
 		__entry->alloc_order,
-		pageblock_order)
+		pageblock_order,
+		show_gfp_flags(__entry->gfp_mask))
 );
 
 TRACE_EVENT(mm_page_alloc_extfrag,

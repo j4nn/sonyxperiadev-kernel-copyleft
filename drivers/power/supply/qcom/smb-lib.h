@@ -84,6 +84,9 @@ enum print_reason {
 #define OTG_DELAY_VOTER			"OTG_DELAY_VOTER"
 #define USBIN_I_VOTER			"USBIN_I_VOTER"
 #define WEAK_CHARGER_VOTER		"WEAK_CHARGER_VOTER"
+#define WBC_VOTER			"WBC_VOTER"
+#define OV_VOTER			"OV_VOTER"
+#define FCC_STEPPER_VOTER		"FCC_STEPPER_VOTER"
 
 #define VCONN_MAX_ATTEMPTS	3
 #define OTG_MAX_ATTEMPTS	3
@@ -106,6 +109,8 @@ enum {
 	TYPEC_CC2_REMOVAL_WA_BIT	= BIT(2),
 	QC_AUTH_INTERRUPT_WA_BIT	= BIT(3),
 	OTG_WA				= BIT(4),
+	OV_IRQ_WA_BIT			= BIT(5),
+	TYPEC_PBS_WA_BIT		= BIT(6),
 };
 
 enum smb_irq_index {
@@ -150,6 +155,12 @@ enum smb_irq_index {
 	SMB_IRQ_MAX,
 };
 
+enum try_sink_exit_mode {
+	ATTACHED_SRC = 0,
+	ATTACHED_SINK,
+	UNATTACHED_SINK,
+};
+
 struct smb_irq_info {
 	const char			*name;
 	const irq_handler_t		handler;
@@ -159,11 +170,24 @@ struct smb_irq_info {
 	int				irq;
 };
 
+#if defined(CONFIG_SOMC_CHARGER_EXTENSION)
+enum somc_running_status {
+	RUNNING_STATUS_NORMAL,
+	RUNNING_STATUS_OFF_CHARGE,
+	RUNNING_STATUS_SHUTDOWN,
+};
+
+#endif
 static const unsigned int smblib_extcon_cable[] = {
 	EXTCON_USB,
 	EXTCON_USB_HOST,
+	EXTCON_USB_CC,
+	EXTCON_USB_SPEED,
 	EXTCON_NONE,
 };
+
+/* EXTCON_USB and EXTCON_USB_HOST are mutually exclusive */
+static const u32 smblib_extcon_exclusive[] = {0x3, 0};
 
 #if defined(CONFIG_SOMC_CHARGER_EXTENSION)
 enum somc_lrc_status {
@@ -279,6 +303,7 @@ struct smb_charger {
 	struct smb_params	param;
 	struct smb_iio		iio;
 	int			*debug_mask;
+	int			*try_sink_enabled;
 	enum smb_mode		mode;
 	struct smb_chg_freq	chg_freq;
 	int			smb_version;
@@ -407,11 +432,15 @@ struct smb_charger {
 	int			usb_icl_change_irq_enabled;
 	u32			jeita_status;
 	u8			float_cfg;
+	bool			use_extcon;
+	bool			otg_present;
+	bool			fcc_stepper_mode;
 
 	/* workaround flag */
 	u32			wa_flags;
 	bool			cc2_detach_wa_active;
 	bool			typec_en_dis_active;
+	bool			try_sink_active;
 #if defined(CONFIG_SOMC_CHARGER_EXTENSION)
 	int			status_before_typec_en_dis_active;
 #endif
@@ -477,6 +506,7 @@ struct smb_charger {
 
 	/* misc */
 	bool			int_cld;
+	int			running_status;
 	int			faked_status;
 
 #endif
@@ -569,14 +599,6 @@ int smblib_get_prop_system_temp_level(struct smb_charger *chg,
 				union power_supply_propval *val);
 int smblib_get_prop_input_current_limited(struct smb_charger *chg,
 				union power_supply_propval *val);
-int smblib_get_prop_batt_voltage_now(struct smb_charger *chg,
-				union power_supply_propval *val);
-int smblib_get_prop_batt_current_now(struct smb_charger *chg,
-				union power_supply_propval *val);
-int smblib_get_prop_batt_temp(struct smb_charger *chg,
-				union power_supply_propval *val);
-int smblib_get_prop_batt_charge_counter(struct smb_charger *chg,
-				union power_supply_propval *val);
 #if defined(CONFIG_SOMC_CHARGER_EXTENSION)
 int smblib_set_prop_charging_enabled(struct smb_charger *chg,
 				const union power_supply_propval *val);
@@ -626,6 +648,8 @@ int smblib_get_prop_pd_in_hard_reset(struct smb_charger *chg,
 int smblib_get_pe_start(struct smb_charger *chg,
 			       union power_supply_propval *val);
 #if defined(CONFIG_SOMC_CHARGER_EXTENSION)
+int smblib_get_prop_legacy_cable_status(struct smb_charger *chg,
+			       union power_supply_propval *val);
 int smblib_get_prop_skin_temp(struct smb_charger *chg,
 				union power_supply_propval *val);
 #endif
@@ -672,8 +696,12 @@ int smblib_get_icl_current(struct smb_charger *chg, int *icl_ua);
 int smblib_get_charge_current(struct smb_charger *chg, int *total_current_ua);
 int smblib_get_prop_pr_swap_in_progress(struct smb_charger *chg,
 				union power_supply_propval *val);
+int smblib_get_prop_from_bms(struct smb_charger *chg,
+				enum power_supply_property psp,
+				union power_supply_propval *val);
 int smblib_set_prop_pr_swap_in_progress(struct smb_charger *chg,
 				const union power_supply_propval *val);
+void smblib_usb_typec_change(struct smb_charger *chg);
 
 #if defined(CONFIG_SOMC_CHARGER_EXTENSION)
 void smblib_somc_thermal_fcc_change(struct smb_charger *chg);

@@ -1,4 +1,4 @@
-/* Copyright (c) 2011-2017, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2011-2018, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -98,6 +98,11 @@ static void msm_actuator_parse_i2c_params(struct msm_actuator_ctrl_t *a_ctrl,
 
 	if (a_ctrl == NULL) {
 		pr_err("failed. actuator ctrl is NULL");
+		return;
+	}
+
+	if (a_ctrl->i2c_reg_tbl == NULL) {
+		pr_err("failed. i2c reg tabl is NULL");
 		return;
 	}
 
@@ -583,6 +588,11 @@ static int32_t msm_actuator_move_focus(
 
 	CDBG("called, dir %d, num_steps %d\n", dir, num_steps);
 
+	if (a_ctrl->step_position_table == NULL) {
+		pr_err("Step Position Table is NULL\n");
+		return -EINVAL;
+	}
+
 	if ((dest_step_pos == a_ctrl->curr_step_pos) ||
 		((dest_step_pos <= a_ctrl->total_steps) &&
 		(a_ctrl->step_position_table[dest_step_pos] ==
@@ -636,6 +646,8 @@ static int32_t msm_actuator_move_focus(
 		a_ctrl->curr_step_pos, dest_step_pos, curr_lens_pos);
 
 	while (a_ctrl->curr_step_pos != dest_step_pos) {
+		if (a_ctrl->curr_region_index >= a_ctrl->region_size)
+			break;
 		step_boundary =
 			a_ctrl->region_params[a_ctrl->curr_region_index].
 			step_bound[dir];
@@ -1299,7 +1311,6 @@ static int32_t msm_actuator_set_param(struct msm_actuator_ctrl_t *a_ctrl,
 		pr_err("Error copying region_params\n");
 		return -EFAULT;
 	}
-
 	if (a_ctrl->act_device_type == MSM_CAMERA_PLATFORM_DEVICE) {
 		cci_client = a_ctrl->i2c_client.cci_client;
 		cci_client->sid =
@@ -1562,6 +1573,13 @@ static int msm_actuator_close(struct v4l2_subdev *sd,
 	}
 	kfree(a_ctrl->i2c_reg_tbl);
 	a_ctrl->i2c_reg_tbl = NULL;
+	if (a_ctrl->actuator_state == ACT_OPS_ACTIVE) {
+		rc = msm_actuator_power_down(a_ctrl);
+		if (rc < 0) {
+			pr_err("%s:%d Actuator Power down failed\n",
+				__func__, __LINE__);
+		}
+	}
 	a_ctrl->actuator_state = ACT_DISABLE_STATE;
 	mutex_unlock(a_ctrl->actuator_mutex);
 	CDBG("Exit\n");

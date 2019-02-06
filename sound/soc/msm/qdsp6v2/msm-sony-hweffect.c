@@ -17,7 +17,6 @@
 #include <linux/slab.h>
 #include <sound/apr_audio-v2.h>
 #include <sound/q6asm-v2.h>
-#include <sound/compress_params.h>
 #include "msm-sony-hweffect.h"
 #include "sound/sony-hweffect-params.h"
 
@@ -161,7 +160,7 @@ int msm_sony_hweffect_sonybundle_handler(struct audio_client *ac,
 	pr_debug("%s: device: %d, num_commands %d\n",
 				__func__, devices, num_commands);
 
-	effect = params + sizeof(struct asm_stream_param_data_v2);
+	effect = params + sizeof(struct param_hdr_v1);
 	for (i = 0; i < num_commands; i++) {
 		uint32_t p_length = 0;
 		uint32_t command_id = *values++;
@@ -490,22 +489,21 @@ int msm_sony_hweffect_sonybundle_handler(struct audio_client *ac,
 		}
 
 		if (p_length) {
-			struct asm_stream_param_data_v2 *param_data;
+			struct param_hdr_v1 *param_data;
 			int ret;
 
 			param_data =
-			(struct asm_stream_param_data_v2 *)params;
+			(struct param_hdr_v1 *)params;
 			param_data->module_id = module_id;
 			param_data->param_id = param_id;
 			param_data->param_size = (uint16_t)p_length;
 			param_data->reserved = 0;
 			p_length +=
-				sizeof(struct asm_stream_param_data_v2);
+				sizeof(struct param_hdr_v1);
 
-			ret = q6asm_send_audio_effects_params(ac,
-						params, p_length);
+			ret = q6asm_set_pp_params(ac, NULL, params, p_length);
 			if (ret < 0) {
-				pr_err("q6asm_send_audio_effects_params "
+				pr_err("q6asm_set_pp_params "
 						"failed %d\n", ret);
 				rc = -EINVAL;
 				goto invalid_config;
@@ -516,6 +514,53 @@ int msm_sony_hweffect_sonybundle_handler(struct audio_client *ac,
 invalid_config:
 	kfree(params);
 	return rc;
+}
+
+void msm_sony_hweffect_sonybundle_get(
+				struct sonybundle_params *sb,
+				long *values)
+{
+	int i;
+
+	pr_debug("%s\n", __func__);
+
+	*values++ = 0;	//output device (unused)
+	*values++ = 11;	//num of commands
+
+	*values++ = SONYBUNDLE_ENABLE;
+	*values++ = sb->common.enable_flag;
+
+	*values++ = DYNAMIC_NORMALIZER_ENABLE;
+	*values++ = sb->dynamic_normalizer.enable_flag;
+
+	*values++ = SFORCE_ENABLE;
+	*values++ = sb->sforce.enable_flag;
+
+	*values++ = VPT20_MODE;
+	*values++ = sb->vpt20.mode;
+
+	*values++ = CLEARPHASE_HP_MODE;
+	*values++ = sb->clearphase_hp.mode;
+
+	*values++ = CLEARAUDIO_CHSEP;
+	*values++ = sb->clearaudio.chsep_coef;
+
+	*values++ = CLEARAUDIO_EQ_COEF;
+	for (i = 0; i < CLEARAUDIO_EQ_COEF_PARAM_LEN; i++) {
+		*values++ = sb->clearaudio.eq_coef[i];
+	}
+
+	*values++ = CLEARAUDIO_VOLUME;
+	*values++ = sb->ca_volume.gain;
+
+	*values++ = CLEARPHASE_SP_ENABLE;
+	*values++ = sb->clearphase_sp.mode;
+
+	*values++ = XLOUD_ENABLE;
+	*values++ = sb->xloud.enable_flag;
+
+	*values++ = DOWN_CONVERT;
+	*values++ = sb->down_convert_enable;
 }
 
 void init_sonybundle_params(struct sonybundle_params *sb)

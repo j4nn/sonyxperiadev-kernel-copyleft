@@ -63,6 +63,8 @@ static bool skip_impdet_retry;
 static bool lineout_detected;
 
 static int det_extn_cable_en;
+static int is_anc_mic_insert = -1;
+
 module_param(det_extn_cable_en, int,
 		S_IRUGO | S_IWUSR | S_IWGRP);
 MODULE_PARM_DESC(det_extn_cable_en, "enable/disable extn cable detect");
@@ -73,6 +75,32 @@ enum wcd_mbhc_cs_mb_en_flag {
 	WCD_MBHC_EN_PULLUP,
 	WCD_MBHC_EN_NONE,
 };
+
+int wcd_mbhc_jack_is_anc_mic_insert(void)
+{
+    return is_anc_mic_insert;
+}
+static void wcd_mbhc_jack_anc_insert_update(u32/*enum snd_jack_type*/ hs_type)
+{
+     switch(hs_type) {
+         case SND_JACK_HEADPHONE:
+             is_anc_mic_insert = 0;
+             break;
+         case SND_JACK_HEADSET:
+             is_anc_mic_insert = 1;
+             break;
+         case SND_JACK_ANC_HEADPHONE:
+             is_anc_mic_insert = 2;
+             break;
+         case SND_JACK_STEREO_MICROPHONE:
+             is_anc_mic_insert = 3;
+             break;
+         default :
+             is_anc_mic_insert = -1;
+             break;
+    }
+    pr_debug("wcd_mbhc_jack_anc_insert_update is_anc_mic_insert:%d", is_anc_mic_insert);
+}
 
 static void wcd_mbhc_jack_report(struct wcd_mbhc *mbhc,
 				struct snd_soc_jack *jack, int status, int mask)
@@ -976,6 +1004,7 @@ static void wcd_mbhc_find_plug_and_report(struct wcd_mbhc *mbhc,
 		     mbhc->current_plug, plug_type);
 	}
 exit:
+        wcd_mbhc_jack_anc_insert_update(mbhc->hph_status);//hph_status is updated with latest info
 	pr_debug("%s: leave\n", __func__);
 }
 
@@ -1647,6 +1676,10 @@ static void wcd_mbhc_swch_irq_handler(struct wcd_mbhc *mbhc)
 	/* Set the detection type appropriately */
 	WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_MECH_DETECTION_TYPE,
 				 !detection_type);
+	if (!detection_type) {
+	//reset headset type at hs removing
+		wcd_mbhc_jack_anc_insert_update(-1);
+	}
 
 	pr_debug("%s: mbhc->current_plug: %d detection_type: %d\n", __func__,
 			mbhc->current_plug, detection_type);
@@ -1762,7 +1795,6 @@ static void wcd_mbhc_swch_irq_handler(struct wcd_mbhc *mbhc)
 		WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_FSM_EN, 0);
 		WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_BTN_ISRC_CTL, 0);
 	}
-
 	mbhc->in_swch_irq_handler = false;
 	WCD_MBHC_RSC_UNLOCK(mbhc);
 	pr_debug("%s: leave\n", __func__);

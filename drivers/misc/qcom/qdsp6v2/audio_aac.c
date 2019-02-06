@@ -2,7 +2,7 @@
  *
  * Copyright (C) 2008 Google, Inc.
  * Copyright (C) 2008 HTC Corporation
- * Copyright (c) 2010-2016, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2010-2017, The Linux Foundation. All rights reserved.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -13,11 +13,6 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
- */
-/*
- * NOTE: This file has been modified by Sony Mobile Communications Inc.
- * Modifications are Copyright (c) 2017 Sony Mobile Communications Inc,
- * and licensed under the license of the file.
  */
 
 #include <linux/msm_audio_aac.h>
@@ -52,8 +47,8 @@ static long audio_ioctl_shared(struct file *file, unsigned int cmd,
 		if (audio->feedback == NON_TUNNEL_MODE) {
 			/* Configure PCM output block */
 			rc = q6asm_enc_cfg_blk_pcm(audio->ac,
-				audio->pcm_cfg.sample_rate,
-				audio->pcm_cfg.channel_count);
+					audio->pcm_cfg.sample_rate,
+					audio->pcm_cfg.channel_count);
 			if (rc < 0) {
 				pr_err("pcm output block config failed\n");
 				break;

@@ -57,6 +57,7 @@
 		qcom,dsi-pll-ssc-mode = "down-spread";
 		qcom,ssc-frequency-hz = <31500>;
 		qcom,ssc-ppm = <5000>;
+
 	};
 };
 

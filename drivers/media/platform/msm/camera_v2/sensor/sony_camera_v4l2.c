@@ -2027,7 +2027,7 @@ static irqreturn_t sony_sensor_sof_irq(int irq, void *handle)
 	struct msm_sensor_ctrl_t *s_ctrl = (struct msm_sensor_ctrl_t *)handle;
 	struct timespec ts;
 
-	ktime_get_ts(&ts);
+	get_monotonic_boottime(&ts);
 	s_ctrl->sof_count++;
 	if (s_ctrl->sof_count > 0xFFFFFFF0)
 		s_ctrl->sof_count = 1;

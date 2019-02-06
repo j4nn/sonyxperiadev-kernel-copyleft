@@ -530,6 +530,16 @@ int kgsl_context_init(struct kgsl_device_private *dev_priv,
 	struct kgsl_device *device = dev_priv->device;
 	char name[64];
 	int ret = 0, id;
+	struct kgsl_process_private  *proc_priv = dev_priv->process_priv;
+
+	if (atomic_read(&proc_priv->ctxt_count) > KGSL_MAX_CONTEXTS_PER_PROC) {
+		KGSL_DRV_ERR(device,
+			"Per process context limit reached for pid %u",
+			dev_priv->process_priv->pid);
+		return -ENOSPC;
+	}
+
+	atomic_inc(&proc_priv->ctxt_count);
 
 	id = _kgsl_get_context_id(device);
 	if (id == -ENOSPC) {
@@ -548,7 +558,7 @@ int kgsl_context_init(struct kgsl_device_private *dev_priv,
 			KGSL_DRV_INFO(device,
 				"cannot have more than %zu contexts due to memstore limitation\n",
 				KGSL_MEMSTORE_MAX);
-
+		atomic_dec(&proc_priv->ctxt_count);
 		return id;
 	}
 
@@ -579,6 +589,7 @@ int kgsl_context_init(struct kgsl_device_private *dev_priv,
 
 out:
 	if (ret) {
+		atomic_dec(&proc_priv->ctxt_count);
 		write_lock(&device->context_lock);
 		idr_remove(&dev_priv->device->context_idr, id);
 		write_unlock(&device->context_lock);
@@ -662,6 +673,7 @@ kgsl_context_destroy(struct kref *kref)
 			device->pwrctrl.constraint.type = KGSL_CONSTRAINT_NONE;
 		}
 
+		atomic_dec(&context->proc_priv->ctxt_count);
 		idr_remove(&device->context_idr, context->id);
 		context->id = KGSL_CONTEXT_INVALID;
 	}
@@ -730,13 +742,13 @@ static int kgsl_suspend_device(struct kgsl_device *device, pm_message_t state)
 	if (!device)
 		return -EINVAL;
 
-	KGSL_PWR_WARN(device, "suspend start\n");
 
 	mutex_lock(&device->mutex);
 	status = kgsl_pwrctrl_change_state(device, KGSL_STATE_SUSPEND);
+	if (status == 0)
+		device->ftbl->suspend_device(device, state);
 	mutex_unlock(&device->mutex);
 
-	KGSL_PWR_WARN(device, "suspend end\n");
 	return status;
 }
 
@@ -745,9 +757,9 @@ static int kgsl_resume_device(struct kgsl_device *device)
 	if (!device)
 		return -EINVAL;
 
-	KGSL_PWR_WARN(device, "resume start\n");
 	mutex_lock(&device->mutex);
 	if (device->state == KGSL_STATE_SUSPEND) {
+		device->ftbl->resume_device(device);
 		kgsl_pwrctrl_change_state(device, KGSL_STATE_SLUMBER);
 	} else if (device->state != KGSL_STATE_INIT) {
 		/*
@@ -760,20 +772,33 @@ static int kgsl_resume_device(struct kgsl_device *device)
 			device->ftbl->idle(device);
 		kgsl_pwrctrl_change_state(device, KGSL_STATE_SLUMBER);
 		KGSL_PWR_ERR(device,
-			"resume invoked without a suspend\n");
+			"resume invoked without a suspend, state = 0x%x\n",
+			device->state);
 	}
 
 	mutex_unlock(&device->mutex);
-	KGSL_PWR_WARN(device, "resume end\n");
 	return 0;
 }
 
 static int kgsl_suspend(struct device *dev)
 {
-
-	pm_message_t arg = {0};
 	struct kgsl_device *device = dev_get_drvdata(dev);
-	return kgsl_suspend_device(device, arg);
+
+	return kgsl_suspend_device(device, PMSG_SUSPEND);
+}
+
+static int kgsl_freeze(struct device *dev)
+{
+	struct kgsl_device *device = dev_get_drvdata(dev);
+
+	return kgsl_suspend_device(device, PMSG_FREEZE);
+}
+
+static int kgsl_poweroff(struct device *dev)
+{
+	struct kgsl_device *device = dev_get_drvdata(dev);
+
+	return kgsl_suspend_device(device, PMSG_HIBERNATE);
 }
 
 static int kgsl_resume(struct device *dev)
@@ -795,6 +820,10 @@ static int kgsl_runtime_resume(struct device *dev)
 const struct dev_pm_ops kgsl_pm_ops = {
 	.suspend = kgsl_suspend,
 	.resume = kgsl_resume,
+	.freeze = kgsl_freeze,
+	.thaw = kgsl_resume,
+	.poweroff = kgsl_poweroff,
+	.restore = kgsl_resume,
 	.runtime_suspend = kgsl_runtime_suspend,
 	.runtime_resume = kgsl_runtime_resume,
 };
@@ -1120,8 +1149,6 @@ static int kgsl_open_device(struct kgsl_device *device)
 		atomic_inc(&device->active_cnt);
 		kgsl_sharedmem_set(device, &device->memstore, 0, 0,
 				device->memstore.size);
-		kgsl_sharedmem_set(device, &device->scratch, 0, 0,
-				device->scratch.size);
 
 		result = device->ftbl->init(device);
 		if (result)
@@ -2744,6 +2771,10 @@ static int _kgsl_gpumem_sync_cache(struct kgsl_mem_entry *entry,
 	int cacheop;
 	int mode;
 
+	 /* Cache ops are not allowed on secure memory */
+	if (entry->memdesc.flags & KGSL_MEMFLAGS_SECURE)
+		return 0;
+
 	/*
 	 * Flush is defined as (clean | invalidate).  If both bits are set, then
 	 * do a flush, otherwise check for the individual bits and clean or inv
@@ -3354,7 +3385,13 @@ long kgsl_ioctl_sparse_phys_free(struct kgsl_device_private *dev_priv,
 	if (entry == NULL)
 		return -EINVAL;
 
+	if (!kgsl_mem_entry_set_pend(entry)) {
+		kgsl_mem_entry_put(entry);
+		return -EBUSY;
+	}
+
 	if (entry->memdesc.cur_bindings != 0) {
+		kgsl_mem_entry_unset_pend(entry);
 		kgsl_mem_entry_put(entry);
 		return -EINVAL;
 	}
@@ -3423,7 +3460,13 @@ long kgsl_ioctl_sparse_virt_free(struct kgsl_device_private *dev_priv,
 	if (entry == NULL)
 		return -EINVAL;
 
+	if (!kgsl_mem_entry_set_pend(entry)) {
+		kgsl_mem_entry_put(entry);
+		return -EBUSY;
+	}
+
 	if (entry->bind_tree.rb_node != NULL) {
+		kgsl_mem_entry_unset_pend(entry);
 		kgsl_mem_entry_put(entry);
 		return -EINVAL;
 	}
@@ -3466,10 +3509,16 @@ static int _sparse_add_to_bind_tree(struct kgsl_mem_entry *entry,
 		parent = *node;
 		this = rb_entry(parent, struct sparse_bind_object, node);
 
-		if (new->v_off < this->v_off)
+		if ((new->v_off < this->v_off) &&
+			((new->v_off + new->size) <= this->v_off))
 			node = &parent->rb_left;
-		else if (new->v_off > this->v_off)
+		else if ((new->v_off > this->v_off) &&
+			(new->v_off >= (this->v_off + this->size)))
 			node = &parent->rb_right;
+		else {
+			kfree(new);
+			return -EADDRINUSE;
+		}
 	}
 
 	rb_link_node(&new->node, parent, node);
@@ -3957,6 +4006,7 @@ long kgsl_ioctl_gpuobj_set_info(struct kgsl_device_private *dev_priv,
 	struct kgsl_process_private *private = dev_priv->process_priv;
 	struct kgsl_gpuobj_set_info *param = data;
 	struct kgsl_mem_entry *entry;
+	int ret = 0;
 
 	if (param->id == 0)
 		return -EINVAL;
@@ -3969,12 +4019,16 @@ long kgsl_ioctl_gpuobj_set_info(struct kgsl_device_private *dev_priv,
 		copy_metadata(entry, param->metadata, param->metadata_len);
 
 	if (param->flags & KGSL_GPUOBJ_SET_INFO_TYPE) {
-		entry->memdesc.flags &= ~((uint64_t) KGSL_MEMTYPE_MASK);
-		entry->memdesc.flags |= param->type << KGSL_MEMTYPE_SHIFT;
+		if (param->type <= (KGSL_MEMTYPE_MASK >> KGSL_MEMTYPE_SHIFT)) {
+			entry->memdesc.flags &= ~((uint64_t) KGSL_MEMTYPE_MASK);
+			entry->memdesc.flags |= (uint64_t)((param->type <<
+				KGSL_MEMTYPE_SHIFT) & KGSL_MEMTYPE_MASK);
+		} else
+			ret = -EINVAL;
 	}
 
 	kgsl_mem_entry_put(entry);
-	return 0;
+	return ret;
 }
 
 long kgsl_ioctl_cff_syncmem(struct kgsl_device_private *dev_priv,
@@ -4405,13 +4459,13 @@ kgsl_get_unmapped_area(struct file *file, unsigned long addr,
 	if (!kgsl_memdesc_use_cpu_map(&entry->memdesc)) {
 		val = get_unmapped_area(NULL, addr, len, 0, flags);
 		if (IS_ERR_VALUE(val))
-			KGSL_MEM_ERR(device,
+			KGSL_DRV_ERR_RATELIMIT(device,
 				"get_unmapped_area: pid %d addr %lx pgoff %lx len %ld failed error %d\n",
 				private->pid, addr, pgoff, len, (int) val);
 	} else {
 		 val = _get_svm_area(private, entry, addr, len, flags);
 		 if (IS_ERR_VALUE(val))
-			KGSL_MEM_ERR(device,
+			KGSL_DRV_ERR_RATELIMIT(device,
 				"_get_svm_area: pid %d mmap_base %lx addr %lx pgoff %lx len %ld failed error %d\n",
 				private->pid, current->mm->mmap_base, addr,
 				pgoff, len, (int) val);
@@ -4730,11 +4784,6 @@ int kgsl_device_platform_probe(struct kgsl_device *device)
 	if (status != 0)
 		goto error_close_mmu;
 
-	status = kgsl_allocate_global(device, &device->scratch,
-		PAGE_SIZE, 0, 0, "scratch");
-	if (status != 0)
-		goto error_free_memstore;
-
 	/*
 	 * The default request type PM_QOS_REQ_ALL_CORES is
 	 * applicable to all CPU cores that are online and
@@ -4780,8 +4829,6 @@ int kgsl_device_platform_probe(struct kgsl_device *device)
 
 	return 0;
 
-error_free_memstore:
-	kgsl_free_global(device, &device->memstore);
 error_close_mmu:
 	kgsl_mmu_close(device);
 error_pwrctrl_close:
@@ -4808,8 +4855,6 @@ void kgsl_device_platform_remove(struct kgsl_device *device)
 		pm_qos_remove_request(&device->pwrctrl.l2pc_cpus_qos);
 
 	idr_destroy(&device->context_idr);
-
-	kgsl_free_global(device, &device->scratch);
 
 	kgsl_free_global(device, &device->memstore);
 

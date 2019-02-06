@@ -67,16 +67,19 @@
 #include "trace/lowmemorykiller.h"
 
 #include "lowmemorykiller_stats.h"
+#ifdef CONFIG_ANDROID_LOW_MEMORY_KILLER_TNG
+#include "lowmemorykiller_tng.h"
+#endif
 
-static uint32_t lowmem_debug_level = 1;
-static short lowmem_adj[6] = {
+uint32_t lowmem_debug_level = 1;
+short lowmem_adj[6] = {
 	0,
 	1,
 	6,
 	12,
 };
 static int lowmem_adj_size = 4;
-static int lowmem_minfree[6] = {
+int lowmem_minfree[6] = {
 	3 * 512,	/* 6MB */
 	2 * 1024,	/* 8MB */
 	4 * 1024,	/* 16MB */
@@ -86,6 +89,17 @@ static int lowmem_minfree_size = 4;
 static int lmk_fast_run = 1;
 
 static unsigned long lowmem_deathpending_timeout;
+
+int lowmem_min_param_size(void)
+{
+	int array_size = ARRAY_SIZE(lowmem_adj);
+
+	if (lowmem_adj_size < array_size)
+		array_size = lowmem_adj_size;
+	if (lowmem_minfree_size < array_size)
+		array_size = lowmem_minfree_size;
+	return array_size;
+}
 
 #define lowmem_print(level, x...)			\
 	do {						\
@@ -157,8 +171,12 @@ static int lmk_vmpressure_notifier(struct notifier_block *nb,
 	unsigned long pressure = action;
 	int array_size = ARRAY_SIZE(lowmem_adj);
 
-	if (!enable_adaptive_lmk)
+	if (!enable_adaptive_lmk) {
+#ifdef CONFIG_ANDROID_LOW_MEMORY_KILLER_TNG
+		balance_cache();
+#endif
 		return 0;
+	}
 
 	if (pressure >= 95) {
 		other_file = global_page_state(NR_FILE_PAGES) + zcache_pages() -
@@ -202,7 +220,9 @@ static int lmk_vmpressure_notifier(struct notifier_block *nb,
 		trace_almk_vmpressure(pressure, other_free, other_file);
 		atomic_set(&shift_adj, 0);
 	}
-
+#ifdef CONFIG_ANDROID_LOW_MEMORY_KILLER_TNG
+	balance_cache();
+#endif
 	return 0;
 }
 
@@ -441,7 +461,7 @@ static unsigned long lowmem_scan(struct shrinker *s, struct shrink_control *sc)
 		lowmem_print(5, "lowmem_scan %lu, %x, return 0\n",
 			     sc->nr_to_scan, sc->gfp_mask);
 		trace_lmk_remain_scan(0, sc->nr_to_scan, sc->gfp_mask);
-		return SHRINK_STOP;
+		return 0;
 	}
 
 	selected_oom_score_adj = min_score_adj;
@@ -468,7 +488,7 @@ static unsigned long lowmem_scan(struct shrinker *s, struct shrink_control *sc)
 				trace_lmk_remain_scan(0, sc->nr_to_scan,
 						      sc->gfp_mask);
 				lmk_inc_stats(LMK_TIMEOUT);
-				return SHRINK_STOP;
+				return 0;
 			}
 		}
 
@@ -481,17 +501,6 @@ static unsigned long lowmem_scan(struct shrinker *s, struct shrink_control *sc)
 			task_unlock(p);
 			continue;
 		}
-
-		if (!thread_group_leader(p) || test_tsk_thread_flag(p, TIF_MEMDIE)) {
-			lowmem_print(2, "Skipped '%s'(%d), adj %hd, ma %hd\n",
-				     p->comm, p->pid, p->signal->oom_score_adj,
-				     min_score_adj);
-			task_unlock(p);
-			if (enable_adaptive_lmk)
-				atomic_set(&shift_adj, 1);
-			continue;
-		}
-
 		tasksize = get_mm_rss(p->mm);
 		task_unlock(p);
 		if (tasksize <= 0)
@@ -525,7 +534,7 @@ static unsigned long lowmem_scan(struct shrinker *s, struct shrink_control *sc)
 		cache_limit = minfree * (long)(PAGE_SIZE / 1024);
 		free = other_free * (long)(PAGE_SIZE / 1024);
 		trace_lowmemory_kill(selected, cache_size, cache_limit, free);
-		lowmem_print(1, "Killing '%s' (%d), adj %hd,\n" \
+		lowmem_print(1, "Killing '%s' (%d) (tgid %d), adj %hd,\n" \
 			        "   to free %ldkB on behalf of '%s' (%d) because\n" \
 			        "   cache %ldkB is below limit %ldkB for oom_score_adj %hd\n" \
 				"   Free memory is %ldkB above reserved.\n" \
@@ -535,7 +544,7 @@ static unsigned long lowmem_scan(struct shrinker *s, struct shrink_control *sc)
 				"   Total file cache is %ldkB\n" \
 				"   Total zcache is %ldkB\n" \
 				"   GFP mask is 0x%x\n",
-			     selected->comm, selected->pid,
+			     selected->comm, selected->pid, selected->tgid,
 			     selected_oom_score_adj,
 			     selected_tasksize * (long)(PAGE_SIZE / 1024),
 			     current->comm, current->pid,
@@ -571,7 +580,6 @@ static unsigned long lowmem_scan(struct shrinker *s, struct shrink_control *sc)
 		trace_almk_shrink(1, ret, other_free, other_file, 0);
 		lmk_inc_stats(LMK_WASTE);
 		rcu_read_unlock();
-		return SHRINK_STOP;
 	}
 
 	lowmem_print(4, "lowmem_scan %lu, %x, return %lu\n",
@@ -589,6 +597,9 @@ static struct shrinker lowmem_shrinker = {
 
 static int __init lowmem_init(void)
 {
+#ifdef CONFIG_ANDROID_LOW_MEMORY_KILLER_TNG
+	lowmem_init_tng(&lowmem_shrinker);
+#endif
 	register_shrinker(&lowmem_shrinker);
 	vmpressure_notifier_register(&lmk_vmpr_nb);
 	init_procfs_lmk();

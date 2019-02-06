@@ -701,6 +701,8 @@ static const struct of_device_id spidev_dt_ids[] = {
 	{ .compatible = "rohm,dh2228fv" },
 	{ .compatible = "lineartechnology,ltc2488" },
 	{ .compatible = "qcom,spi-msm-codec-slave", },
+	{ .compatible = "nxp,mpc57xx", },
+	{ .compatible = "infineon,sli97", },
 #ifdef CONFIG_ONESEG_TUNER_SMTVJ19X
 	{ .compatible = "sony,vj190-spi", },
 #endif

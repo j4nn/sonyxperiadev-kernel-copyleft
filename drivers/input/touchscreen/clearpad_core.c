@@ -5315,7 +5315,7 @@ static int clearpad_do_calibration(struct clearpad_t *this, int mode,
 	unsigned long timeout;
 	int rc = 0;
 	int reset_rc = 0;
-	bool calibrate;
+	bool calibrate = false;
 	u8 status, bit, need_bit;
 
 	switch (mode) {
@@ -6927,6 +6927,7 @@ end:
 
 static int clearpad_pm_suspend(struct device *dev)
 {
+#ifdef CLEARPAD_WAKEUP_GESTURE
 	struct clearpad_t *this = dev_get_drvdata(dev);
 
 	HWLOGI(this, "pm suspend was called\n");
@@ -6938,12 +6939,13 @@ static int clearpad_pm_suspend(struct device *dev)
 
 	HWLOGI(this, "pm suspend(active=%s)\n",
 	       this->dev_active ? "true" : "false");
-
+#endif
 	return 0;
 }
 
 static int clearpad_pm_resume(struct device *dev)
 {
+#ifdef CLEARPAD_WAKEUP_GESTURE
 	struct clearpad_t *this = dev_get_drvdata(dev);
 
 	HWLOGI(this, "pm resume was called\n");
@@ -6954,7 +6956,7 @@ static int clearpad_pm_resume(struct device *dev)
 
 	HWLOGI(this, "pm resume(active=%s)\n",
 	       this->dev_active ? "true" : "false");
-
+#endif
 	return 0;
 }
 
@@ -9158,7 +9160,7 @@ static int clearpad_probe(struct platform_device *pdev)
 	int rc;
 	bool retry = false;
 #ifdef CONFIG_TOUCHSCREEN_CLEARPAD_RMI_DEV
-	struct platform_device *rmi_dev;
+	struct platform_device *rmi_dev = NULL;
 #endif
 	this = devm_kzalloc(&pdev->dev, sizeof(struct clearpad_t), GFP_KERNEL);
 	if (!this) {
@@ -9372,9 +9374,11 @@ err_in_fb_register_client:
 #endif
 err_device_del:
 #ifdef CONFIG_TOUCHSCREEN_CLEARPAD_RMI_DEV
-	platform_device_del(rmi_dev);
+	if (rmi_dev)
+		platform_device_del(rmi_dev);
 err_device_put:
-	platform_device_put(rmi_dev);
+	if (rmi_dev)
+		platform_device_put(rmi_dev);
 #endif
 err_free:
 	UNLOCK(&touchctrl->session_lock);

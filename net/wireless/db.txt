@@ -185,7 +185,7 @@ country KR: DFS-ETSI
 	(2402 - 2472 @ 20), (20)
 	# Channel 12 - 13.
 	(2457 - 2482 @ 20), (20), PASSIVE-SCAN, NO-IBSS
-	(5170 - 5250 @ 80), (17), PASSIVE-SCAN, AUTO-BW
+	(5170 - 5250 @ 80), (20), PASSIVE-SCAN, AUTO-BW
 	(5250 - 5330 @ 80), (20), PASSIVE-SCAN, DFS, AUTO-BW
 	(5490 - 5710 @ 80), (20), PASSIVE-SCAN, DFS
 	(5735 - 5815 @ 80), (20), PASSIVE-SCAN
@@ -289,9 +289,14 @@ country RU: DFS-ETSI
 	(2402 - 2472 @ 20), (20)
 	# Channel 12 - 13.
 	(2457 - 2482 @ 20), (20), PASSIVE-SCAN, NO-IBSS
+	# Channel 36 - 48
 	(5170 - 5250 @ 80), (20), PASSIVE-SCAN, AUTO-BW
+	# Channel 52 - 64
 	(5250 - 5330 @ 80), (20), PASSIVE-SCAN, DFS, AUTO-BW
+	# Channel 132-140
 	(5650 - 5710 @ 40), (20), PASSIVE-SCAN, DFS
+	# Channel 149 - 165
+	(5735 - 5835 @ 80), (14), PASSIVE-SCAN, NO-IBSS
 
 country SA: DFS-ETSI
 	(2402 - 2472 @ 20), (20)
@@ -373,12 +378,12 @@ country VE: DFS-FCC
 	(5250 - 5330 @ 80), (23), PASSIVE-SCAN, DFS, AUTO-BW
 	(5735 - 5835 @ 80), (30)
 
-country XA
+country XA:
 	(2402 - 2472 @ 20), (20)
 	# Channel 12 - 13.
 	(2457 - 2482 @ 20), (20), PASSIVE-SCAN, NO-IBSS
 
-country XC
+country XC:
 	(2402 - 2472 @ 20), (20)
 	# Channel 12 - 13.
 	(2457 - 2482 @ 20), (20), PASSIVE-SCAN, NO-IBSS
@@ -388,6 +393,8 @@ country XC
 	(5250 - 5330 @ 80), (20), PASSIVE-SCAN, NO-IBSS
 	# Channel 132 - 140
 	(5650 - 5710 @ 40), (20), PASSIVE-SCAN, NO-IBSS
+	# Channel 149 - 165
+	(5735 - 5835 @ 80), (14), PASSIVE-SCAN, NO-IBSS
 
 country ZA: DFS-FCC
 	(2402 - 2472 @ 20), (20)

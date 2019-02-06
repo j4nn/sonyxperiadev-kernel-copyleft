@@ -3,7 +3,7 @@
  *
  * This code is based on drivers/scsi/ufs/ufshcd.c
  * Copyright (C) 2011-2013 Samsung India Software Operations
- * Copyright (c) 2013-2017, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2018, The Linux Foundation. All rights reserved.
  *
  * Authors:
  *	Santosh Yaraganavi <santosh.sy@samsung.com>
@@ -179,6 +179,9 @@ void ufshcd_update_query_stats(struct ufs_hba *hba,
 {
 }
 #endif
+
+#define PWR_INFO_MASK	0xF
+#define PWR_RX_OFFSET	4
 
 #define UFSHCD_REQ_SENSE_SIZE	18
 
@@ -639,6 +642,7 @@ static void __ufshcd_cmd_log(struct ufs_hba *hba, char *str, char *cmd_type,
 
 	entry.str = str;
 	entry.lba = lba;
+	entry.cmd_id = cmd_id;
 	entry.transfer_len = transfer_len;
 	entry.doorbell = ufshcd_readl(hba, REG_UTP_TRANSFER_REQ_DOOR_BELL);
 	entry.tag = tag;
@@ -844,6 +848,24 @@ static void ufshcd_print_tmrs(struct ufs_hba *hba, unsigned long bitmap)
 		ufshcd_hex_dump("TM RSP: ", tmrdp->task_rsp_upiu,
 				sizeof(struct utp_task_req_desc));
 	}
+}
+
+static void ufshcd_print_fsm_state(struct ufs_hba *hba)
+{
+	int err = 0, tx_fsm_val = 0, rx_fsm_val = 0;
+
+	err = ufshcd_dme_get(hba,
+			UIC_ARG_MIB_SEL(MPHY_TX_FSM_STATE,
+			UIC_ARG_MPHY_TX_GEN_SEL_INDEX(0)),
+			&tx_fsm_val);
+	dev_err(hba->dev, "%s: TX_FSM_STATE = %u, err = %d\n", __func__,
+			tx_fsm_val, err);
+	err = ufshcd_dme_get(hba,
+			UIC_ARG_MIB_SEL(MPHY_RX_FSM_STATE,
+			UIC_ARG_MPHY_RX_GEN_SEL_INDEX(0)),
+			&rx_fsm_val);
+	dev_err(hba->dev, "%s: RX_FSM_STATE = %u, err = %d\n", __func__,
+			rx_fsm_val, err);
 }
 
 static void ufshcd_print_host_state(struct ufs_hba *hba)
@@ -4646,8 +4668,9 @@ int ufshcd_change_power_mode(struct ufs_hba *hba,
 	int ret = 0;
 
 	/* if already configured to the requested pwr_mode */
-	if (pwr_mode->gear_rx == hba->pwr_info.gear_rx &&
-	    pwr_mode->gear_tx == hba->pwr_info.gear_tx &&
+	if (!hba->restore_needed &&
+		pwr_mode->gear_rx == hba->pwr_info.gear_rx &&
+		pwr_mode->gear_tx == hba->pwr_info.gear_tx &&
 	    pwr_mode->lane_rx == hba->pwr_info.lane_rx &&
 	    pwr_mode->lane_tx == hba->pwr_info.lane_tx &&
 	    pwr_mode->pwr_rx == hba->pwr_info.pwr_rx &&
@@ -4725,6 +4748,7 @@ int ufshcd_change_power_mode(struct ufs_hba *hba,
 
 		memcpy(&hba->pwr_info, pwr_mode,
 			sizeof(struct ufs_pa_layer_attr));
+		hba->ufs_stats.power_mode_change_cnt++;
 	}
 
 	return ret;
@@ -5212,7 +5236,7 @@ static int ufshcd_slave_alloc(struct scsi_device *sdev)
 	/* REPORT SUPPORTED OPERATION CODES is not supported */
 	sdev->no_report_opcodes = 1;
 
-	/* WRITE_SAME command is not supported*/
+	/* WRITE_SAME command is not supported */
 	sdev->no_write_same = 1;
 
 	ufshcd_set_queue_depth(sdev);
@@ -5618,10 +5642,10 @@ static void __ufshcd_transfer_req_compl(struct ufs_hba *hba,
 					completion = ktime_get();
 					delta_us = ktime_us_delta(completion,
 						  req->lat_hist_io_start);
-					/* rq_data_dir() => true if WRITE */
-					blk_update_latency_hist(&hba->io_lat_s,
-						(rq_data_dir(req) == READ),
-						delta_us);
+					blk_update_latency_hist(
+						(rq_data_dir(req) == READ) ?
+						&hba->io_lat_read :
+						&hba->io_lat_write, delta_us);
 				}
 			}
 			/* Do not touch lrbp after scsi done */
@@ -5977,7 +6001,7 @@ static void ufshcd_exception_event_handler(struct work_struct *work)
 
 out:
 	ufshcd_scsi_unblock_requests(hba);
-	pm_runtime_put_sync(hba->dev);
+	pm_runtime_put(hba->dev);
 	return;
 }
 
@@ -6276,6 +6300,52 @@ static void ufshcd_update_uic_reg_hist(struct ufs_uic_err_reg_hist *reg_hist,
 	reg_hist->pos = (reg_hist->pos + 1) % UIC_ERR_REG_HIST_LENGTH;
 }
 
+static void ufshcd_rls_handler(struct work_struct *work)
+{
+	struct ufs_hba *hba;
+	int ret = 0;
+	u32 mode;
+
+	hba = container_of(work, struct ufs_hba, rls_work);
+	ufshcd_scsi_block_requests(hba);
+	pm_runtime_get_sync(hba->dev);
+	ret = ufshcd_wait_for_doorbell_clr(hba, U64_MAX);
+	if (ret) {
+		dev_err(hba->dev,
+			"Timed out (%d) waiting for DB to clear\n",
+			ret);
+		goto out;
+	}
+
+	ufshcd_dme_get(hba, UIC_ARG_MIB(PA_PWRMODE), &mode);
+	if (hba->pwr_info.pwr_rx != ((mode >> PWR_RX_OFFSET) & PWR_INFO_MASK))
+		hba->restore_needed = true;
+
+	if (hba->pwr_info.pwr_tx != (mode & PWR_INFO_MASK))
+		hba->restore_needed = true;
+
+	ufshcd_dme_get(hba, UIC_ARG_MIB(PA_RXGEAR), &mode);
+	if (hba->pwr_info.gear_rx != mode)
+		hba->restore_needed = true;
+
+	ufshcd_dme_get(hba, UIC_ARG_MIB(PA_TXGEAR), &mode);
+	if (hba->pwr_info.gear_tx != mode)
+		hba->restore_needed = true;
+
+	if (hba->restore_needed)
+		ret = ufshcd_config_pwr_mode(hba, &(hba->pwr_info));
+
+	if (ret)
+		dev_err(hba->dev, "%s: Failed setting power mode, err = %d\n",
+			__func__, ret);
+	else
+		hba->restore_needed = false;
+
+out:
+	ufshcd_scsi_unblock_requests(hba);
+	pm_runtime_put_sync(hba->dev);
+}
+
 /**
  * ufshcd_update_uic_error - check and set fatal UIC error flags.
  * @hba: per-adapter instance
@@ -6315,6 +6385,8 @@ static irqreturn_t ufshcd_update_uic_error(struct ufs_hba *hba)
 					hba->full_init_linereset = true;
 				}
 			}
+			if (!hba->full_init_linereset)
+				schedule_work(&hba->rls_work);
 		}
 		retval |= IRQ_HANDLED;
 	}
@@ -6783,6 +6855,7 @@ static int ufshcd_abort(struct scsi_cmnd *cmd)
 	 */
 	scsi_print_command(cmd);
 	if (!hba->req_abort_count) {
+		ufshcd_print_fsm_state(hba);
 		ufshcd_print_host_regs(hba);
 		ufshcd_print_host_state(hba);
 		ufshcd_print_pwr_info(hba);
@@ -7398,9 +7471,6 @@ static void ufshcd_tune_unipro_params(struct ufs_hba *hba)
 static void ufshcd_clear_dbg_ufs_stats(struct ufs_hba *hba)
 {
 	int err_reg_hist_size = sizeof(struct ufs_uic_err_reg_hist);
-
-	hba->ufs_stats.hibern8_exit_cnt = 0;
-	hba->ufs_stats.last_hibern8_exit_tstamp = ktime_set(0, 0);
 
 	memset(&hba->ufs_stats.pa_err, 0, err_reg_hist_size);
 	memset(&hba->ufs_stats.dl_err, 0, err_reg_hist_size);
@@ -8067,11 +8137,14 @@ static int ufshcd_config_vreg(struct device *dev,
 		struct ufs_vreg *vreg, bool on)
 {
 	int ret = 0;
-	struct regulator *reg = vreg->reg;
-	const char *name = vreg->name;
+	struct regulator *reg;
+	const char *name;
 	int min_uV, uA_load;
 
 	BUG_ON(!vreg);
+
+	reg = vreg->reg;
+	name = vreg->name;
 
 	if (regulator_count_voltages(reg) > 0) {
 		min_uV = on ? vreg->min_uV : 0;
@@ -8509,7 +8582,8 @@ static void ufshcd_hba_exit(struct ufs_hba *hba)
 		if (ufshcd_is_clkscaling_supported(hba)) {
 			if (hba->devfreq)
 				ufshcd_suspend_clkscaling(hba);
-			destroy_workqueue(hba->clk_scaling.workq);
+			if (hba->clk_scaling.workq)
+				destroy_workqueue(hba->clk_scaling.workq);
 		}
 		ufshcd_disable_clocks(hba, false);
 		ufshcd_setup_hba_vreg(hba, false);
@@ -9391,9 +9465,10 @@ latency_hist_store(struct device *dev, struct device_attribute *attr,
 
 	if (kstrtol(buf, 0, &value))
 		return -EINVAL;
-	if (value == BLK_IO_LAT_HIST_ZERO)
-		blk_zero_latency_hist(&hba->io_lat_s);
-	else if (value == BLK_IO_LAT_HIST_ENABLE ||
+	if (value == BLK_IO_LAT_HIST_ZERO) {
+		memset(&hba->io_lat_read, 0, sizeof(hba->io_lat_read));
+		memset(&hba->io_lat_write, 0, sizeof(hba->io_lat_write));
+	} else if (value == BLK_IO_LAT_HIST_ENABLE ||
 		 value == BLK_IO_LAT_HIST_DISABLE)
 		hba->latency_hist_enabled = value;
 	return count;
@@ -9404,8 +9479,14 @@ latency_hist_show(struct device *dev, struct device_attribute *attr,
 		  char *buf)
 {
 	struct ufs_hba *hba = dev_get_drvdata(dev);
+	size_t written_bytes;
 
-	return blk_latency_hist_show(&hba->io_lat_s, buf);
+	written_bytes = blk_latency_hist_show("Read", &hba->io_lat_read,
+			buf, PAGE_SIZE);
+	written_bytes += blk_latency_hist_show("Write", &hba->io_lat_write,
+			buf + written_bytes, PAGE_SIZE - written_bytes);
+
+	return written_bytes;
 }
 
 static DEVICE_ATTR(latency_hist, S_IRUGO | S_IWUSR,
@@ -10052,6 +10133,7 @@ int ufshcd_init(struct ufs_hba *hba, void __iomem *mmio_base, unsigned int irq)
 	/* Initialize work queues */
 	INIT_WORK(&hba->eh_work, ufshcd_err_handler);
 	INIT_WORK(&hba->eeh_work, ufshcd_exception_event_handler);
+	INIT_WORK(&hba->rls_work, ufshcd_rls_handler);
 
 	/* Initialize UIC command mutex */
 	mutex_init(&hba->uic_cmd_mutex);

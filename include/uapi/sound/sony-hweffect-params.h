@@ -61,4 +61,6 @@ struct xloud_param_data {
 
 void *sony_hweffect_params_getparam(unsigned int effect_id);
 
+int sony_hweffect_params_getparam_size(long *values);
+
 #endif
