@@ -112,7 +112,7 @@ static int procfs_create_node(char *name)
 	if (!entry)
 		return -ENXIO;
 
-	subentry = proc_create_data(name, S_IFREG | S_IRUSR, entry, &tag_fops,
+	subentry = proc_create_data(name, S_IFREG | S_IRUSR | S_IRGRP, entry, &tag_fops,
 			(void *)name);
 	if (!subentry)
 		return -ENOMEM;

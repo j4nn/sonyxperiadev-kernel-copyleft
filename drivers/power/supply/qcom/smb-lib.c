@@ -4414,6 +4414,12 @@ static void smblib_somc_force_legacy_icl(struct smb_charger *chg,
 		return;
 	}
 
+	if (chg->typec_mode == POWER_SUPPLY_TYPEC_SINK_AUDIO_ADAPTER) {
+		vote(chg->usb_icl_votable, LEGACY_UNKNOWN_VOTER, true,
+								USBIN_500MA);
+		return;
+	}
+
 	switch (apsd_result_bit) {
 	case SDP_CHARGER_BIT:
 		if (!is_client_vote_enabled(chg->usb_icl_votable,
