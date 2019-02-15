@@ -272,6 +272,9 @@ void cam_req_mgr_workq_destroy(struct cam_req_mgr_core_workq **crm_workq)
 			destroy_workqueue((*crm_workq)->job);
 			(*crm_workq)->job = NULL;
 		}
+/* sony extension begin */
+		kfree((*crm_workq)->task.pool);
+/* sony extension end */
 		kfree(*crm_workq);
 		*crm_workq = NULL;
 	}

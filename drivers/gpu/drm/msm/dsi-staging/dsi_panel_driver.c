@@ -36,7 +36,6 @@ static BLOCKING_NOTIFIER_HEAD(drm_notifier_list);
 #define ADC_RNG_MIN		0
 #define ADC_RNG_MAX		1
 
-static bool aod_first_skipped;
 static u32 down_period;
 static unsigned long lcdid_adc = 1505000;
 struct device virtdev;
@@ -82,9 +81,6 @@ void dsi_panel_driver_detection(
 	u32 dev_index = 0;
 	u32 dsi_index = 0;
 	u32 adc_uv = 0;
-
-	aod_first_skipped = false;
-	pr_notice("%s: aod_first_skipped = false", __func__);
 
 	parent = of_get_parent(*np);
 
@@ -696,6 +692,8 @@ int dsi_panel_driver_post_power_off(struct dsi_panel *panel)
 		return -EINVAL;
 	}
 	spec_pdata = panel->spec_pdata;
+	if (spec_pdata->aod_mode == 1)
+		spec_pdata->aod_mode = 0;
 	if (spec_pdata->pre_sod_mode && spec_pdata->sod_mode == SOD_POWER_OFF) {
 		pr_info("%s: power off\n", __func__);
 	} else if (spec_pdata->pre_sod_mode) {
@@ -2412,10 +2410,9 @@ static ssize_t dsi_panel_aod_mode_store(struct device *dev,
 			spec_pdata->aod_mode);
 		return -EINVAL;
 	}
-	if (spec_pdata->aod_mode != mode)
+	if (spec_pdata->aod_mode != mode) {
 		spec_pdata->aod_mode = mode;
 
-	if (aod_first_skipped) {
 		if (mode) {
 			dsi_panel_set_aod_on(panel);
 			dsi_display_set_backlight((void *)display, panel->bl_config.bl_level);
@@ -2435,8 +2432,6 @@ static ssize_t dsi_panel_aod_mode_store(struct device *dev,
 			dsi_display_set_backlight((void *)display, panel->bl_config.bl_level);
 		}
 	}
-	aod_first_skipped = true;
-	pr_notice("%s: aod_first_skipped = true", __func__);
 
 	return count;
 }
