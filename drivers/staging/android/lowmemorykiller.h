@@ -12,6 +12,8 @@
 
 /* The lowest score LMK is using */
 #define LMK_SCORE_THRESHOLD 0
+#define LMK_TRACE_OOMKILL (-1)
+#define LMK_TRACE_MEMERROR (-2)
 
 extern u32 lowmem_debug_level;
 

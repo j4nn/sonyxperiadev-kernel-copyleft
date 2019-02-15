@@ -40,7 +40,7 @@
 static inline u64 zcache_pages(void) { return 0; }
 #endif
 #define LMK_ZOMBIE_SIZE (4096)
-
+static int seek_count;
 static unsigned long lowmem_count_tng(struct shrinker *s,
 				      struct shrink_control *sc);
 static unsigned long lowmem_scan_tng(struct shrinker *s,
@@ -167,8 +167,12 @@ static unsigned long lowmem_count_tng(struct shrinker *s,
 	struct calculated_params cp;
 	short score;
 
-	if (current_is_kswapd())
-		return 0;
+	if (current_is_kswapd()) {
+		if (seek_count++ < (s->seeks * 4))
+			return 0;
+		seek_count = 0;
+	}
+
 	lmk_inc_stats(LMK_COUNT);
 	cp.selected_tasksize = 0;
 	spin_lock(&lmk_task_lock);
@@ -239,6 +243,17 @@ static unsigned long lowmem_scan_tng(struct shrinker *s,
 
 			/* move to kill pending set */
 			ldpt = kmem_cache_alloc(lmk_dp_cache, GFP_ATOMIC);
+			if (!ldpt) {
+				WARN_ON(1);
+				lmk_inc_stats(LMK_MEM_ERROR);
+				cp.selected_tasksize = SHRINK_STOP;
+				trace_lmk_sigkill(selected->pid, selected->comm,
+						  LMK_TRACE_MEMERROR,
+						  cp.selected_tasksize,
+						  sc->gfp_mask);
+
+				goto unlock_out;
+			}
 			ldpt->tsk = selected;
 
 			__lmk_death_pending_add(ldpt);

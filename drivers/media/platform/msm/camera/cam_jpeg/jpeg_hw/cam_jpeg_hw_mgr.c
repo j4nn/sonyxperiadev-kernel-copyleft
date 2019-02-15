@@ -244,7 +244,18 @@ static int cam_jpeg_mgr_release_ctx(
 		CAM_ERR(CAM_JPEG, "invalid ctx_data %pK", ctx_data);
 		return -EINVAL;
 	}
-
+	if (ctx_data->cdm_cmd) {
+		kfree(ctx_data->cdm_cmd);
+		ctx_data->cdm_cmd = NULL;
+	}
+	if (ctx_data->cdm_cmd_chbase) {
+		kfree(ctx_data->cdm_cmd_chbase);
+		ctx_data->cdm_cmd_chbase = NULL;
+	}
+	if (ctx_data->cmd_chbase_buf_addr) {
+		kfree(ctx_data->cmd_chbase_buf_addr);
+		ctx_data->cmd_chbase_buf_addr = NULL;
+	}
 	mutex_lock(&ctx_data->ctx_mutex);
 	if (!ctx_data->in_use) {
 		CAM_ERR(CAM_JPEG, "ctx is already un-used: %pK", ctx_data);
@@ -921,7 +932,8 @@ static int cam_jpeg_mgr_release_hw(void *hw_mgr_priv, void *release_hw_args)
 	if (!ctx_data->in_use) {
 		CAM_ERR(CAM_JPEG, "ctx is not in use");
 		mutex_unlock(&hw_mgr->hw_mgr_mutex);
-		return -EINVAL;
+		rc = -EINVAL;
+		goto release_ctx;
 	}
 	dev_type = ctx_data->jpeg_dev_acquire_info.dev_type;
 
@@ -929,7 +941,8 @@ static int cam_jpeg_mgr_release_hw(void *hw_mgr_priv, void *release_hw_args)
 	if (hw_mgr->cdm_info[dev_type][0].ref_cnt == 0) {
 		mutex_unlock(&hw_mgr->hw_mgr_mutex);
 		CAM_ERR(CAM_JPEG, "Error Unbalanced deinit");
-		return -EFAULT;
+		rc = -EFAULT;
+		goto release_ctx;
 	}
 
 	hw_mgr->cdm_info[dev_type][0].ref_cnt--;
@@ -945,6 +958,7 @@ static int cam_jpeg_mgr_release_hw(void *hw_mgr_priv, void *release_hw_args)
 
 	mutex_unlock(&hw_mgr->hw_mgr_mutex);
 
+release_ctx:
 	rc = cam_jpeg_mgr_release_ctx(hw_mgr, ctx_data);
 	if (rc) {
 		mutex_unlock(&hw_mgr->hw_mgr_mutex);
@@ -1061,7 +1075,7 @@ static int cam_jpeg_mgr_acquire_hw(void *hw_mgr_priv, void *acquire_hw_args)
 	size = hw_mgr->cdm_info[dev_type][0].
 		cdm_ops->cdm_required_size_changebase();
 	ctx_data->cmd_chbase_buf_addr = kzalloc(size*4, GFP_KERNEL);
-	if (!ctx_data->cdm_cmd_chbase) {
+	if (!ctx_data->cmd_chbase_buf_addr) {
 		rc = -ENOMEM;
 		goto start_cdm_hdl_failed;
 	}
@@ -1105,7 +1119,6 @@ start_cdm_hdl_failed:
 		cam_cdm_release(hw_mgr->cdm_info[dev_type][0].cdm_handle);
 	hw_mgr->cdm_info[dev_type][0].ref_cnt--;
 acq_cdm_hdl_failed:
-	kfree(ctx_data->cdm_cmd);
 	cam_jpeg_mgr_release_ctx(hw_mgr, ctx_data);
 	mutex_unlock(&hw_mgr->hw_mgr_mutex);
 

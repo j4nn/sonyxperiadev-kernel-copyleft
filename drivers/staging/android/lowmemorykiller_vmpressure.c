@@ -29,6 +29,8 @@
 #include <linux/slab.h>
 #include <linux/vmpressure.h>
 
+#include <trace/events/lmk.h>
+
 #include "lowmemorykiller.h"
 #include "lowmemorykiller_tng.h"
 #include "lowmemorykiller_stats.h"
@@ -91,6 +93,17 @@ void balance_cache(void)
 
 			/* move to kill pending set */
 			ldpt = kmem_cache_alloc(lmk_dp_cache, GFP_ATOMIC);
+			if (!ldpt) {
+				WARN_ON(1);
+				lmk_inc_stats(LMK_MEM_ERROR);
+				cp.selected_tasksize = SHRINK_STOP;
+				trace_lmk_sigkill(selected->pid, selected->comm,
+						  LMK_TRACE_MEMERROR,
+						  cp.selected_tasksize,
+						  0);
+				goto unlock_out;
+			}
+
 			ldpt->tsk = selected;
 
 			__lmk_death_pending_add(ldpt);
@@ -102,6 +115,11 @@ void balance_cache(void)
 			send_sig(SIGKILL, selected, 0);
 			LMK_TAG_TASK_DIE(selected);
 			print_obituary(selected, &cp, 0);
+			trace_lmk_sigkill(selected->pid, selected->comm,
+					  cp.selected_oom_score_adj,
+					  cp.selected_tasksize,
+					  0);
+
 			task_unlock(selected);
 
 			lmk_inc_stats(LMK_BALANCE_KILL);

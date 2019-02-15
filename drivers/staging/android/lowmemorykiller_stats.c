@@ -42,6 +42,7 @@ struct lmk_stats {
 	atomic_long_t morgue_count;
 	atomic_long_t balance_kill;
 	atomic_long_t balance_waste;
+	atomic_long_t mem_error;
 
 	atomic_long_t unknown; /* internal */
 } st;
@@ -91,6 +92,9 @@ void lmk_inc_stats(int key)
 	case LMK_BALANCE_WASTE:
 		atomic_long_inc(&st.balance_waste);
 		break;
+	case LMK_MEM_ERROR:
+		atomic_long_inc(&st.mem_error);
+		break;
 	default:
 		atomic_long_inc(&st.unknown);
 		break;
@@ -115,6 +119,8 @@ static int lmk_proc_show(struct seq_file *m, void *v)
 		   atomic_long_read(&st.balance_kill));
 	seq_printf(m, "balance waste: %ld\n",
 		   atomic_long_read(&st.balance_waste));
+	seq_printf(m, "mem error: %ld\n",
+		   atomic_long_read(&st.mem_error));
 	seq_printf(m, "unknown: %ld (internal)\n",
 		   atomic_long_read(&st.unknown));
 

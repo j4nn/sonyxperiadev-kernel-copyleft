@@ -61,11 +61,19 @@ static int lowmemorykiller_oom_notify(struct notifier_block *self,
 			goto unlock_out;
 		}
 
+		get_task_struct(selected);
 		/* move to kill pending set */
 		ldpt = kmem_cache_alloc(lmk_dp_cache, GFP_ATOMIC);
-		ldpt->tsk = selected;
-
-		__lmk_death_pending_add(ldpt);
+		/* if we fail to alloc we ignore the death pending list */
+		if (ldpt) {
+			ldpt->tsk = selected;
+			__lmk_death_pending_add(ldpt);
+		} else {
+			WARN_ON(1);
+			lmk_inc_stats(LMK_MEM_ERROR);
+			trace_lmk_sigkill(selected->pid, selected->comm,
+					  LMK_TRACE_MEMERROR, *nfreed, 0);
+		}
 		if (!__lmk_task_remove(selected, lrw->key))
 			WARN_ON(1);
 
@@ -74,10 +82,11 @@ static int lowmemorykiller_oom_notify(struct notifier_block *self,
 		send_sig(SIGKILL, selected, 0);
 		LMK_TAG_TASK_DIE(selected);
 		trace_lmk_sigkill(selected->pid, selected->comm,
-				  -1, *nfreed,
+				  LMK_TRACE_OOMKILL, *nfreed,
 				  0);
 
 		task_unlock(selected);
+		put_task_struct(selected);
 		lmk_inc_stats(LMK_OOM_KILL_COUNT);
 		goto out;
 	}

@@ -34,6 +34,7 @@ enum  lmk_kill_stats {
 	LMK_BALANCE_KILL = 13,
 	LMK_BALANCE_WASTE = 14,
 	LMK_MORGUE_COUNT = 15,
+	LMK_MEM_ERROR = 16,
 };
 
 #define LMK_PROCFS_NAME "lmkstats"
