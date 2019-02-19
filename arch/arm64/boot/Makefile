@@ -26,6 +26,8 @@ DTB_LIST := $(addsuffix .dtb,$(DTB_NAMES))
 DTB_OBJS := $(addprefix $(obj)/dts/,$(DTB_LIST))
 else
 DTB_OBJS := $(shell find $(obj)/dts/ -name \*.dtb)
+DTB_MERGED_OBJS := $(shell find $(obj)/dts/ -name \*.dtbm)
+DTB_OBJS := $(DTB_MERGED_OBJS) $(filter-out $(pathsubst %.dtbm,%.dtb,$(DTB_MERGED_OBJS)),$(DTB_OBJS))
 endif
 
 # Add RTIC DTB to the DTB list if RTIC MPGen is enabled
